@@ -1,0 +1,288 @@
+# Spec build report — mdv6 (implementing `SPEC.md` v0.11.2)
+
+> - **Spec:** `SPEC.md` v0.11.2, sha256 `760028e2a37a6adb2b551ef52a7fb8cde1524cbdbb8c3f342894cde90aecdd57`; `TYPOGRAPHY.md` and `reference/*.png` as the spec ships them. The spec was edited twice during the build, both editorial (F-001, F-002 below); no normative row changed.
+> - **Plan:** `IMPLEMENTATION_PLAN.md` (7d552a2) and `DETAILED_IMPLEMENTATION_PLAN_W0..W7.md`; the §7 fork (T-43 on a host with no signing identity) was answered by the user: *record as pending*.
+> - **Built tree:** HEAD `5cb1f2e`, waves W0–W7 each committed after its gate. Sibling folders were not consulted (user instruction).
+> - **Gate:** `swift test --parallel --xunit-output junit.xml` → 159 tests, 0 failures; speccheck 1.6.0 Phase A and Phase B both `CONFORMING`, exit 0 (§3).
+> - **Verdict:** **VERIFICATION PENDING** — every id is realised and mechanically proved; the §9.6 observed tests (T-44, T-47, T-48) have snapshots the agent looked at and compared against `reference/`, but the spec requires a *person's* look, and two hover/keystroke clauses plus T-43's credentialed run cannot be exercised on this host (§5).
+
+---
+
+## 1. Wave ledger
+
+Every wave ran its `DETAILED_IMPLEMENTATION_PLAN_W<n>.md` §6 gate before its commit. Exit codes are the real ones from this host (macOS 26.6 / Darwin 25.6, Swift 6.4 toolchain in Swift-5 language mode, SwiftPM only — no Xcode project).
+
+| Wave | Commit | Gate as run | Exit |
+|---|---|---|---|
+| spec + plan | b117d9f, 7d552a2 | `sha256sum SPEC.md` recorded in the plan front matter | — |
+| F-001 | 63b4ad9 | `speccheck check … --judge mock` no longer exits 3 (duplicate R-35 declaration) | 0 |
+| W0 Runnable bundle | a4496e0 | `make` → `build/mdv6.app`; `codesign --verify --deep --strict build/mdv6.app`; `bash tools/gate-w0.sh` (T-01/T-02/T-03 launcher clauses); `swift test --filter BuildAndLauncherTests` | 0 |
+| F-002 | 505ca83 | `speccheck check … --judge mock` reports 0 dangling (C-18 now declared) | 0 |
+| W1 Pure contracts and the spec's metrics | b48a170 | `swift test --filter "SplitTests\|MathContractTests\|AnchorTests\|TypographyTests\|MiscContractTests\|MetricsTests\|ThemeTests\|MermaidSanitizeTests"` | 0 |
+| W2 Persistence and history | dc1746d | `swift test --filter PersistenceTests` (temp DB, schema v4, FTS5, concurrency) | 0 |
+| W3 Trust boundary and renderers | 08bf061 | `swift test --filter "CodeRendererTests\|MathRenderTests\|MermaidTests\|ImageLoadingTests"` (recording HTTP server for C-16) | 0 |
+| W4 Article and the render harness | e6064c8 | `swift run --package-path tools/render-harness render-harness --check test-docs/render-cases.json`; `--scan test-docs/mermaid`; `swift test --filter "RhythmAndDisplayMathTests\|HarnessTests\|ArticleTests"` (T-45/T-46 measured against the spec's bands) | 0 |
+| W5 Headless session | a37a6fb | `swift test --filter SessionTests` (every §3.1 transition, real FSEvents watcher) | 0 |
+| W6 Window chrome | 11ae99f | `swift test --filter "ChromeModelTests\|ChromeSnapshotTests"`; `tools/observe.sh` snapshots of the three panes under Sevilla/Charcoal/Twilight | 0 |
+| W7 Prove it | 5cb1f2e | `make && swift test --parallel --xunit-output junit.xml` (159/0); Phase A and Phase B speccheck; `tools/observed-pass.sh` → `build/observed/*.png`; `bash tools/idle-cpu.sh` (K-15) | 0 |
+
+`README.md` was written in W7 from the built tree and landed in the W7 commit (5cb1f2e) rather than a separate `docs(mdv6)` commit; every command block in it was re-run as written before this report (§4).
+
+## 2. Defects found during the build (F-nnn)
+
+| ID | Where | What was off | Resolution |
+|---|---|---|---|
+| F-001 | `SPEC.md` §5.4 | The R-35 cross-reference row was a second **bold** declaration of R-35; speccheck exited 3 (`duplicate declaration of R-35`). | `fix(spec): v0.11.1` (63b4ad9) — the row is un-bolded; no wording changed. |
+| F-002 | `SPEC.md` §5.5 | The heading `Window chrome (§5.5, normative structure)` did not declare `C-18`, so every `C-18` citation (R-42, I-015, §11) was dangling. | `fix(spec): v0.11.2` (505ca83) — heading reads `### C-18 Window chrome (§5.5, normative structure)`. |
+| F-003 | `mdv6/Core/WindowAccessor.swift` | Under a dark theme the app hung: `updateNSView` assigned a fresh `NSAppearance` on every SwiftUI update, which re-rendered the hierarchy forever (title stayed `mdv6`, hooks silent). | `applyAppearance(_:isDark:)` is idempotent — it assigns only when the appearance *name* differs; regression test `ChromeModelTests.testAppearanceAssignmentIsIdempotent`. Fixed in W7 (5cb1f2e). |
+| F-004 | `SPEC.md` T-45 vs I-014 | Observation, not a defect in the build: T-45 names $v$ = `paragraphBottomSpacing` for the heading→paragraph boundary, while I-014's combination rule gives $\max(\text{bottom}_{\text{heading}}, 0)$. The measured gaps satisfy **both** bands under Sevilla and Charcoal (`RhythmAndDisplayMathTests.testRhythmBandSevillaAndCharcoal`), so nothing needed changing; recorded for `spec-writing` as a wording to reconcile. | none required; logged. |
+
+No spec row was weakened; `SPEC.md` was edited only by the two `fix(spec)` commits.
+
+## 3. The speccheck gate (final test run)
+
+Final run, on HEAD 5cb1f2e, after `make`:
+
+```text
+swift test --parallel --xunit-output junit.xml      → 159 tests, 0 failures (junit.xml)
+speccheck check --spec SPEC.md --src mdv6/Core --tests Tests --results junit.xml --judge mock --strict --out build/speccheck
+speccheck: CONFORMING - 169/169 passing (100.0%), 0 failing, 0 skipped, 0 weak, 0 unverified, 0 untested, 0 uncited; 0 dangling, 0 stale; judge=mock
+speccheck check --spec SPEC.md --src mdv6/Core --tests Tests --results junit.xml --judge llm --strict --out build/speccheck-llm
+speccheck: CONFORMING - 169/169 passing (100.0%), 0 failing, 0 skipped, 0 weak, 0 unverified, 0 untested, 0 uncited; 0 dangling, 0 stale; judge=llm
+```
+
+Phase B judge: `openai/gpt-4o-mini` via OpenRouter (`SPECCHECK_JUDGE_URL=https://openrouter.ai/api/v1/chat/completions`, per the user's instruction — not a local model); `judge_available: true`, `unknown_rate: 0.0` (`build/speccheck-llm/speccheck.json` → `metrics.unknown_rate`), `judge_prompt_sha256` `21ec7849…77fdf7`. Both `--strict` runs exited 0.
+
+The first Phase B run of W7 returned 10 `WEAKLY_PASSING` ids (R-07, R-09, K-15, T-32, E-25, E-30, T-22, T-28, T-43, T-44) and a second run 3 (K-11, T-30, T-43). Each was fixed in the **test**, never by re-pointing a citation at a weaker test: R-07 now asserts GFM constructs change the raster (strike-through ink, task checkbox, footnote height, table rows); R-09 asserts the style menu, `mdv6.mermaid.style` persistence across a fresh `UserDefaults`, the 2× PNG export size and the plain-monospace source view; K-15/T-32 parse the 30 samples and assert median ≤ 1 % and nearest-rank p95 ≤ 3 %; E-25 asserts `renderGeneration` bumps on every load/reload and not on an aborted load; E-30 quits with two windows and relaunches into exactly one (R-40 head); T-30 asserts the click → pasteboard/flash/re-flash rules and that a `####` heading is never a copy target; T-43/K-11 dry-run the whole release chain in a disposable clone tagged `v1.2.3` and assert the artefact names, the codesign/notarytool/stapler/spctl steps in §5.3 order, and that `VERSION=9.9.9` is refused before any artefact is named. Two suite-level flakes surfaced by the parallel runner were also fixed in the tests: the idle-CPU test now waits for sibling `xctest` workers to drain (K-15 is defined on an *otherwise idle* host), and the FSEvents burst test allows one batch per 50 ms window the burst actually spanned.
+
+Note for the record: speccheck's Swift adapter treats `//` inside a string literal as a comment; test files keep `//` out of literals on lines with braces (`RecordingServer.slashes`).
+
+## 4. Artifact cross-check (§3.2 of the skill)
+
+| Check | Evidence |
+|---|---|
+| §4 contracts exist with the pinned shape | C-01 `Info.plist`/K-02 (`BuildAndLauncherTests.testBuiltBundleLayoutAndSignature`); C-02 `ParsedDocument` (`SplitTests`); C-03 schema v4 + triggers (`PersistenceTests.testOpenCreatesSchemaV4`); C-05 `CodeRenderer` (`CodeRendererTests`); C-07 `MathMarkdown`/`MathImageCache`/`MathSymbols` (`MathContractTests`, `MathRenderTests`); C-08 anchors (`AnchorTests`); C-16 `RemoteImageLoader` (`ImageLoadingTests` with a recording server); C-17 harness (`HarnessTests`); C-18 chrome (`ChromeModelTests`, `ChromeSnapshotTests`) |
+| §5 surfaces | §5.1 menus/shortcuts: `AppCommand` + the `Mdv6App` Commands in `mdv6App.swift` — each command's effect is asserted through the session (`SessionTests`, `ChromeModelTests`), the toolbar row in `testToolbarSpec`; the menu titles and key equivalents themselves were checked against the §5.1 table by inspection of `mdv6App.swift` (no test enumerates the menu); §5.2 `bin/mdv6` usage lines 2–9 (`tools/gate-w0.sh`, `testLauncherSurface`); §5.3 Makefile targets (`testDistRefusesWithoutExactTag`, `testTaggedCheckoutNamesArtefactsFromTag`); §5.4 diagnostics (`DiagnosticsTests`); §5.5 chrome (`SidebarViews.swift`, the only file that draws a pane — I-015) |
+| Schemas / fixtures | `test-docs/render-cases.json` (18 cases; metric cases are oracles, pixel cases regression guards), `test-docs/goldens/*.png` (regression guards only — never cited as conformance evidence), `tools/seed-store` seeds the isolated store for observed runs |
+| §10 dependencies | MarkdownUI 2.4.1, SwiftTreeSitter 0.25.0 (tree-sitter 0.25.10), beautiful-mermaid-swift 1.0.4, vendored SwiftMath 1.7.3 + the four patches listed in `Vendor/SwiftMath/README.md` (`testVendoredSwiftMathInventory`, `tools/check-swiftmath.sh`), 11 tree-sitter grammars pinned in `mdv6/Grammars/README.md`, system sqlite3 with FTS5. Nothing else. |
+| Data artifacts | `mdv6.db` schema v4 (`PersistenceTests`), `UserDefaults` keys and clamps (`Preferences`, `MiscContractTests`), history JSON codec (`testHistoryCodec`) |
+| Determinism | `HarnessTests.testScanCorpusOrderAndDeterminism` (same input → identical PNG bytes); `MathRenderTests` cache keys; `CodeRendererTests.testCacheKeyAndFlush` |
+| Formulas | R-30 zoom step (`ZoomStep`, `testZoomStep` incl. the half-integer case); C-17 $q \leq 0.001$ pixel rule (`RenderMetrics.pixelMismatch`, `MetricsTests`); K-16/T-45 band $v \leq g \leq v + 0.6f$ (`testRhythmBandSevillaAndCharcoal`); K-15 median/p95 (`testIdleMathCPU`); R-27 title rule (`testBookmarkTitle`) |
+| Diagrams vs rows | Every §3.1 transition has a `SessionTests` case (`testDeleteRowTransitions`, `testReloadRules`, `testEmptyToViewingOnOpen`, `testRealFileWatcherCoalesces`, …); the mermaid state diagram introduced no transition the rows lack. |
+| Reference images / TYPOGRAPHY.md | §5 below; T-45/T-46 measured through the harness against the spec's own bands and centring rule (an oracle the build did not produce) |
+| README | Re-run before this report: `make`, `bin/mdv6 --version` → `1.0.0`, `swift test --parallel --xunit-output junit.xml`, both speccheck phases, `render-harness --check` (18 cases, exit 0), `render-harness --scan test-docs/mermaid` (15 records, exit 0), `bash tools/gate-w0.sh` (PASS ×all), `tools/idle-cpu.sh` (median 0.00 %, p95 0.00 %). `tools/check-swiftmath.sh` needs network and was run in W0. |
+| Every wave closed | §1 |
+| No silent omissions | The Phase 0 checklist (R 42 / C 18 / I 15 / K 16 / E 30 / T 48 = 169 ids) is exactly the 169 `PASSING` rows of §6. No id was deferred. Optional behaviour is gated, not omitted (remote images behind `mdv6_load_remote_images`, smart typography behind `mdv6_smart_typography`). |
+
+**Size.** `cloc` over the hand-written Swift (`mdv6/Core`, `App`, `tools/render-harness/Sources`, `tools/seed-store`; vendored SwiftMath, grammars and fixtures excluded): **5,818 code lines / 52 files** (`mdv6/Core` alone 5,746 / 50); tests 2,789 / 21 files. The plan budgeted 7,000–9,500 production lines against the 5.4k smallest-complete-build anchor; the build landed ~400 lines above that anchor — the added structure is the C-18 chrome model (`ChromeModel.swift`, theme-independent metrics/rules) and the C-17 `--check` metrics (`RenderMetrics`, `HarnessCases`), both required by v0.11 and absent from the v0.8 anchor. The budget was an estimate, not a floor.
+
+## 5. The observed pass (§3.2b)
+
+**Environment.** This host cannot be driven on screen: screen recording is not granted (`screencapture` yields black) and synthetic keystrokes land in another application, so no keystroke or pointer event was ever sent. The plan's stand-in was used instead: with `MDV6_SNAPSHOT_DIR` set the running **product** (not the harness) accepts a distributed notification that posts a §5.1 command or calls the handler a pane control calls (`tools/observe.sh drive …`) and another that writes the window's rendered frame (title bar and toolbar included) to PNG. Runs use an isolated store (`MDV6_SUPPORT_DIR`, `MDV6_DEFAULTS_SUITE`) seeded by `tools/seed-store`. The files are under `build/observed/` (not committed; regenerate with `tools/observed-pass.sh`).
+
+**Who looked.** The agent opened each file below and compared it region by region with `reference/MDV-ORIGINAL-SEVILLA.png` and `reference/MDV-SCREEN.png`. §9.6 requires the outcome *as observed by a person*; until the user opens these files (or runs `tools/observed-pass.sh` and looks), the rows stay **verification pending**. Oracle for every line: the spec's reference images (structure) and `TYPOGRAPHY.md` (faces, sizes, colours) — never the build's own goldens.
+
+| Test | Looked at | What the snapshot shows | Status |
+|---|---|---|---|
+| T-44 | `T-44-sevilla.png`, `T-44-sevilla-start.png`, `T-44-sevilla-placeholder-toc.png` (math.md, Sevilla, 4 bookmarks + placeholder, 1280×820 like the reference) | Title `math.md`; toolbar exactly `+`, pencil, palette, bookmark, `sidebar.right`; `HISTORY` / `ON THIS PAGE` / `BOOKMARKS` small-caps tracked headers with the magnifier; history rows name over `~`-abbreviated head-truncated path, current row filled; TOC rows indented by level, the clicked row accent-filled with page-background text; placeholder row first with `pin.fill` and `⌘0`, divider below, current row accent-filled; bookmark rows title over file name with `⌘1`–`⌘4` badges; `BOOKMARKS` header with the count capsule `4`; floating find button at the article's top-trailing corner. Matches the anatomy of `MDV-ORIGINAL-SEVILLA.png` pane by pane. | pending person's look |
+| T-44 (states) | `T-44-search-revealed.png` (magnifier clicked via the handler: field revealed and focused), `T-44-bookmarks-collapsed.png` (header click), `T-44-sidebar-collapsed.png` | Reveal, collapse and sidebar-collapse states drawn as C-18.3/C-18.4 describe. **Esc hiding the field** needs a keystroke — not exercised. | pending (Esc clause unobservable here) |
+| T-44 (themes) | `T-44-charcoal.png`, `T-44-charcoal-states.png`, `T-44-twilight.png`, `T-44-twilight-states.png`, `snapshot-{sevilla,charcoal,twilight}.png` | Same structure under Charcoal and Twilight; only colours/faces change (I-015); the title bar takes the theme's colour scheme (C-18.1). | pending person's look |
+| T-47 | `T-47-first.png` (`syntax.md` title), `T-47-second-window.png` / `T-47-two-windows-tables.md.png` / `T-47-two-windows-math.md.png` (⌘⇧O second window titled `tables.md`, first unchanged), `T-47-empty-title.png` (only history row deleted → title `mdv6`) | Title follows the displayed file per window; reverts to the product name in `EMPTY`. | pending person's look |
+| T-48 | `T-48-stripe-paragraph.png` (hover handler on a paragraph → 3 pt accent stripe at the leading edge), `T-48-stripe-table.png` (no stripe on a fence), `T-48-placeholder-cleared.png` (row and divider gone; ⌘0 beeps — `SessionTests.testPlaceholder`), `T-48-third-moved-up.png` (third bookmark now second, badges renumbered ⌘1–⌘4), `T-48-moved-to-bottom.png`, `T-48-removed.png`, `T-48-relaunch-order.png` (order persisted across relaunch) | Stripe and reorder states as C-18.7/C-18.9 describe; the menu's nine entries, order and enablement are asserted in `ChromeModelTests.testBookmarkMenuOrderAndEnablement` / `testReorderFollowsSlots`. The **hover-only divider chevron** and the right-click menu *presentation* need a pointer — not exercised. | pending (pointer clauses unobservable here) |
+| §9.2/§9.4 spot checks | `T-05-syntax.png`, `T-06-code.png`, `T-09-images.png`, `T-10-typography.png`, `T-11-start.png` / `T-11-zoom-hud.png` (HUD shows `110 %` 0.35 s after ⌘=), `T-13-diagrams.png`, `T-23-findbar.png`, `T-38-help.png` | The product rendering the corpus documents in the state each test names. | agent looked; supplementary |
+
+**Measured visual claims (oracle: the spec's numbers, in `swift test`).** T-45 rhythm bands under Sevilla and Charcoal and the single-`Markdown`-view ±2 pt cross-check (`RhythmAndDisplayMathTests.testRhythmBandSevillaAndCharcoal`); T-46 identical rasters for the two `$$` forms, ink box centred within 2 pt, `.display` height (`testDisplayMathSingleLineAndFence`); T-17 Mermaid math-node ink; T-19 sequence layout. These are green and need no person.
+
+**Pending clauses (blocking PASS).** (1) T-44: *Esc hides the revealed search field*; T-48: *the divider chevron appears on hover* and the context menus *as presented* — need a pointer/keyboard on an unlocked, permitted console. (2) T-43: the credentialed run (`Developer ID` identity, `mdv6-notary` keychain profile, exact `vX.Y.Z` tag) — the tag gate (`testDistRefusesWithoutExactTag`) and the chain's naming/order (`testTaggedCheckoutNamesArtefactsFromTag`, dry run in a tagged clone) are proved; signing, notarisation and stapling are not. (3) T-12 (macOS appearance switch), T-18 (window resize), T-21 (Mermaid hover controls), T-31 (drags) — their model halves are in `swift test`; the pointer halves were not driven. To close: on a host with screen recording granted, run `tools/observed-pass.sh`, then hover a divider, press Esc in the revealed field, right-click a bookmark, and look.
+
+## 6. Per-ID evidence (from `build/speccheck/speccheck.json`)
+
+169 ids: R 42, C 18, I 15, K 16, E 30, T 48 — all `PASSING` in both phases. *Realised in* lists the `mdv6/Core` files citing the id (source citations do not count for T-nn); *verified by* the joined green tests.
+
+| ID | Status | Realised in | Verified by |
+|---|---|---|---|
+| R-01 | PASSING | AppModel.swift, DocumentSession.swift, HistoryManager.swift, mdv6App.swift | `testMultipleURLsLastDisplayed` (SessionTests); `testAddingVersusSelectingRoutes` (SessionTests) |
+| R-02 | PASSING | DocumentSession.swift | `testDirectoryLoads` (SessionTests) |
+| R-03 | PASSING | DocumentSession.swift | `testDropRules` (SessionTests) |
+| R-04 | PASSING | DocumentSession.swift, FileSystem.swift, ParsedDocument.swift | `testEmptyToViewingOnOpen` (SessionTests); `testUnreadableKeepsPreviousDocument` (SessionTests); `testBlankLineSplitsAndEmptiesDropped` (SplitTests) |
+| R-05 | PASSING | DocumentSession.swift, FileWatcher.swift | `testReloadRules` (SessionTests); `testRealFileWatcherCoalesces` (SessionTests) |
+| R-06 | PASSING | ArticleView.swift, DocumentRootView.swift, DocumentSession.swift | `testScrollPositions` (PersistenceTests); `testScrollPersistAndRestore` (SessionTests) |
+| R-07 | PASSING | ArticleTheme.swift | `testRendererProducesPageBitmap` (RhythmAndDisplayMathTests) |
+| R-08 | PASSING | CodeBlockChrome.swift, CodeLanguage.swift, CodeRenderer.swift | `testFenceParts` (ArticleTests); `testPromptAwareFences` (MiscContractTests); `testLanguageLabel` (MiscContractTests) |
+| R-09 | PASSING | MDVMermaidDiagramView.swift, MDVMermaidPipeline.swift, Preferences.swift | `testStyleMenuPersistenceAndExport` (MermaidTests) |
+| R-10 | PASSING | ContentLimits.swift, MDVMermaidDiagramView.swift, MDVMermaidPipeline.swift | `testUnsupportedTypesAndParseErrorsFallBack` (MermaidTests) |
+| R-11 | PASSING | ColumnWidth.swift, MDVMermaidDiagramView.swift, MDVMermaidPipeline.swift | `testMermaidWidthPlumbing` (ArticleTests); `testDisplaySizeAndRaster` (MermaidTests); `testColumnWidthFormula` (MiscContractTests) |
+| R-12 | PASSING | MathMarkdown.swift, MathViews.swift | `testTextVsDisplayMode` (MathRenderTests); `testRewriteURLForm` (MathContractTests) |
+| R-13 | PASSING | MathMarkdown.swift, ThemeManager.swift | `testColourFollowsSpec` (MathRenderTests); `testMathNodes` (MermaidTests); `testHeadingMathSizing` (MathContractTests) |
+| R-14 | PASSING | ContentLimits.swift, MathImageCache.swift, MathSymbols.swift, MathViews.swift | `testRejectedLatexFallsBackWithMessage` (MathRenderTests); `testPreprocessRewrites` (MathContractTests) |
+| R-15 | PASSING | MDVMermaidPipeline.swift, MermaidMathNodes.swift | `testMathNodes` (MermaidTests) |
+| R-16 | PASSING | DocumentSession.swift, ImageLoading.swift, ImageProviders.swift, MathViews.swift | `testLocalAndDataImages` (ImageLoadingTests) |
+| R-17 | PASSING | ArticleView.swift, SmartTypography.swift | `testSmartTypographyOptOuts` (ThemeTests); `testProseIsSmartened` (TypographyTests); `testMathRewrittenBeforeSmartening` (TypographyTests) |
+| R-18 | PASSING | DocumentSession.swift | `testDeleteRowTransitions` (SessionTests); `testBackForward` (SessionTests) |
+| R-19 | PASSING | DocumentSession.swift | `testHandleLink` (SessionTests) |
+| R-20 | PASSING | DocumentSession.swift, HistoryManager.swift | `testPaneClamps` (ChromeModelTests); `testHistoryAddSelectRemove` (PersistenceTests); `testDeleteRowTransitions` (SessionTests) |
+| R-21 | PASSING | DocumentSession.swift, SidebarViews.swift | `testPaneClamps` (ChromeModelTests); `testTOCSelectionLifecycle` (SessionTests) |
+| R-22 | PASSING | ArticleView.swift, DocumentSession.swift, MathViews.swift, Sections.swift | `testCopySectionFlash` (SessionTests) |
+| R-23 | PASSING | Diagnostics.swift, DocumentSession.swift, EditorLauncher.swift | `testEditorOutcomes` (SessionTests) |
+| R-24 | PASSING | ArticleView.swift, ChromeModel.swift, DocumentRootView.swift, DocumentSession.swift, FindHighlight.swift, ParsedDocument.swift, SidebarViews.swift | `testFindCountingAndHighlighting` (ArticleTests); `testSidebarFocusRule` (ChromeModelTests); `testFindModel` (SessionTests); `testBlockKindHelpers` (SplitTests) |
+| R-25 | PASSING | DocumentSession.swift, FTSQuery.swift | `testIndexAndSearch` (PersistenceTests) |
+| R-26 | PASSING | Database.swift, FileSystem.swift, HistoryManager.swift | `testRemoveFileAndPrune` (PersistenceTests); `testHistoryAddSelectRemove` (PersistenceTests); `testIndexMtimeGateAndLaunchReindex` (PersistenceTests); `testMalformedHistoryValue` (PersistenceTests) |
+| R-27 | PASSING | ArticleView.swift, BookmarkTitle.swift, BookmarksManager.swift, Database.swift, DocumentRootView.swift, DocumentSession.swift, Sections.swift, SidebarViews.swift | `testBookmarkTitle` (AnchorTests); `testBookmarkMenuOrderAndEnablement` (ChromeModelTests); `testReorderFollowsSlots` (ChromeModelTests); `testBookmarkRows` (PersistenceTests); `testBookmarksManager` (PersistenceTests); `testBookmarkCurrentSpot` (SessionTests) |
+| R-28 | PASSING | ArticleView.swift, BookmarkTitle.swift, DocumentSession.swift, PlaceholderStore.swift, SidebarViews.swift | `testBookmarkMenuOrderAndEnablement` (ChromeModelTests); `testPlaceholderStoreIsTransient` (PersistenceTests); `testPlaceholder` (SessionTests) |
+| R-29 | PASSING | DocumentRootView.swift, DocumentSession.swift, ThemeManager.swift, WindowAccessor.swift | `testCatalogOrderAndIds` (ThemeTests); `testResolution` (ThemeTests) |
+| R-30 | PASSING | ArticleTheme.swift, DocumentRootView.swift, MathMarkdown.swift, Preferences.swift, ZoomStep.swift | `testFontSizeFollowsZoomAndCommentsItalic` (CodeRendererTests); `testZoomStep` (MiscContractTests) |
+| R-31 | PASSING | HelpManager.swift, mdv6App.swift | `testHelpOverwrittenEveryTime` (SessionTests) |
+| R-32 | PASSING | Preferences.swift | `testPreferencesDefaultsAndFallbacks` (PersistenceTests) |
+| R-33 | PASSING | — | `testLauncherSurface` (BuildAndLauncherTests) |
+| R-34 | PASSING | — | `testBuiltBundleLayoutAndSignature` (BuildAndLauncherTests); `testDistRefusesWithoutExactTag` (BuildAndLauncherTests); `testTaggedCheckoutNamesArtefactsFromTag` (BuildAndLauncherTests) |
+| R-35 | PASSING | Diagnostics.swift, EditorLauncher.swift, ThemeManager.swift | `testNoOtherLogCallSites` (DiagnosticsTests); `testDiagnosticsEvents` (MiscContractTests); `testCorruptFileDegrades` (PersistenceTests) |
+| R-36 | PASSING | ContentLimits.swift | `testRejectedLatexFallsBackWithMessage` (MathRenderTests); `testUnsupportedTypesAndParseErrorsFallBack` (MermaidTests) |
+| R-37 | PASSING | — | `testSuiteAndCI` (BuildAndLauncherTests) |
+| R-38 | PASSING | CodeLanguage.swift, CodeRenderer.swift | `testAllGrammarsAndQueriesLoad` (CodeRendererTests); `testSwiftAndSQLCaptureClasses` (CodeRendererTests); `testLanguageResolution` (MiscContractTests) |
+| R-39 | PASSING | DocumentRenderer.swift, HarnessCases.swift | `testScanCorpusOrderAndDeterminism` (HarnessTests) |
+| R-40 | PASSING | AppModel.swift, DocumentSession.swift, mdv6App.swift | `testOneWindowAfterQuitWithTwoWindows` (ChromeModelTests); `testStartup` (SessionTests) |
+| R-41 | PASSING | ContentLimits.swift, DocumentSession.swift, FileSystem.swift, ImageLoading.swift, MDVMermaidPipeline.swift, MathImageCache.swift, PipelineProbe.swift | `testLatexCeiling` (MathRenderTests); `testMermaidCeiling` (MermaidTests); `testContentLimits` (MiscContractTests); `testUnreadableKeepsPreviousDocument` (SessionTests) |
+| R-42 | PASSING | ArticleView.swift | `testRhythmBandSevillaAndCharcoal` (RhythmAndDisplayMathTests) |
+| C-01 | PASSING | ThemeManager.swift | `testBuiltBundleLayoutAndSignature` (BuildAndLauncherTests) |
+| C-02 | PASSING | ArticleView.swift, BookmarkTitle.swift, CodeBlockChrome.swift, ParsedDocument.swift, Sections.swift, SmartTypography.swift | `testBlankLineSplitsAndEmptiesDropped` (SplitTests); `testFenceKeepsBlankLinesAndClosesOnSameMarker` (SplitTests); `testMathFenceSpansBlankLines` (SplitTests); `testIndentedCodeBlockSplitsAtBlankLine` (SplitTests); `testLineEndingsNormalised` (SplitTests); `testTOCHeadings` (SplitTests); `testBlockKindHelpers` (SplitTests) |
+| C-03 | PASSING | Database.swift, FTSQuery.swift, SidebarViews.swift | `testFTSQueryConstruction` (MiscContractTests); `testOpenCreatesSchemaV4` (PersistenceTests); `testEqualRankOrderingAndLimit` (PersistenceTests) |
+| C-04 | PASSING | MDVMermaidPipeline.swift, Preferences.swift, ThemeManager.swift, ZoomStep.swift | `testPreferencesDefaultsAndFallbacks` (PersistenceTests); `testResolution` (ThemeTests) |
+| C-05 | PASSING | CodeBlockChrome.swift, CodeLanguage.swift, CodeRenderer.swift, ThemeManager.swift | `testFenceParts` (ArticleTests); `testAllGrammarsAndQueriesLoad` (CodeRendererTests); `testSwiftAndSQLCaptureClasses` (CodeRendererTests); `testNineLanguagesColourAndUnknownIsPlain` (CodeRendererTests); `testFontSizeFollowsZoomAndCommentsItalic` (CodeRendererTests); `testCacheKeyAndFlush` (CodeRendererTests); `testLanguageResolution` (MiscContractTests); `testPromptAwareFences` (MiscContractTests); `testLanguageLabel` (MiscContractTests); `testCodePaletteLookup` (ThemeTests) |
+| C-06 | PASSING | MDVMermaidPipeline.swift, MermaidMathNodes.swift, MermaidRepairs.swift | `testNodeInTwoSubgraphsBelongsToLast` (MermaidTests); `testSanitisedDiagramRenders` (MermaidTests); `testStateDescriptionsAndClassDefs` (MermaidTests); `testDocumentTheme` (MermaidTests); `testSequenceRepairs` (MermaidTests); `testPiecewiseLinearRemap` (MermaidTests); `testMathNodes` (MermaidTests); `testFrontMatterDropped` (MermaidSanitizeTests); `testXYChartSeriesNames` (MermaidSanitizeTests); `testColorNormalisation` (MermaidSanitizeTests); `testStateDescriptionsMerged` (MermaidSanitizeTests); `testParallelogramsExpanded` (MermaidSanitizeTests); `testFormattingTagsStripped` (MermaidSanitizeTests); `testSanitizeAppliesAllRulesInOrder` (MermaidSanitizeTests) |
+| C-07 | PASSING | BookmarkTitle.swift, MathImageCache.swift, MathMarkdown.swift, MathSpec.swift, MathSymbols.swift, MathViews.swift, MermaidMathNodes.swift | `testOwnParagraphRegistry` (ArticleTests); `testRewritesAndSymbolsTypeset` (MathRenderTests); `testCacheKeyedByURL` (MathRenderTests); `testMathNodes` (MermaidTests); `testDisplayMathSingleLineAndFence` (RhythmAndDisplayMathTests); `testBookmarkTitle` (AnchorTests); `testNonMathDollarsAreLiteral` (MathContractTests); `testSpanDetection` (MathContractTests); `testRewriteURLForm` (MathContractTests); `testOwnParagraphEmission` (MathContractTests); `testPlainText` (MathContractTests); `testPreprocessRewrites` (MathContractTests); `testRegisteredSymbolTable` (MathContractTests); `testTOCHeadings` (SplitTests) |
+| C-08 | PASSING | Anchors.swift, BookmarksManager.swift, Database.swift, DocumentSession.swift | `testFingerprintNormalisation` (AnchorTests); `testResolveAnchor` (AnchorTests); `testScrollRestorable` (AnchorTests); `testOpenCreatesSchemaV4` (PersistenceTests); `testBookmarkRows` (PersistenceTests); `testScrollPositions` (PersistenceTests); `testScrollPersistAndRestore` (SessionTests) |
+| C-09 | PASSING | ArticleTheme.swift, ThemeManager.swift | `testCatalogOrderAndIds` (ThemeTests); `testDefaults` (ThemeTests); `testSmartTypographyOptOuts` (ThemeTests); `testCrossThemeRules` (ThemeTests) |
+| C-10 | PASSING | SmartTypography.swift | `testProseIsSmartened` (TypographyTests); `testExclusionsInsideProse` (TypographyTests); `testBlocksReturnedUnchanged` (TypographyTests) |
+| C-11 | PASSING | DocumentSession.swift, HeadingSlug.swift, ParsedDocument.swift | `testHandleLink` (SessionTests); `testHeadingSlug` (SplitTests) |
+| C-12 | PASSING | BookmarkTitle.swift, Sections.swift | `testBookmarkTitle` (AnchorTests); `testCopySectionFlash` (SessionTests); `testStripInlineMarkdown` (SplitTests); `testSectionRange` (SplitTests) |
+| C-13 | PASSING | ThemeManager.swift | `testBuiltBundleLayoutAndSignature` (BuildAndLauncherTests) |
+| C-14 | PASSING | EditorLauncher.swift, ImageLoading.swift, mdv6App.swift | `testLocalAndDataImages` (ImageLoadingTests); `testRejectedLatexFallsBackWithMessage` (MathRenderTests); `testUnsupportedTypesAndParseErrorsFallBack` (MermaidTests) |
+| C-15 | PASSING | HistoryManager.swift, Preferences.swift | `testHistoryCodec` (MiscContractTests); `testHistoryAddSelectRemove` (PersistenceTests); `testMalformedHistoryValue` (PersistenceTests) |
+| C-16 | PASSING | ImageLoading.swift | `testRemoteContract` (ImageLoadingTests); `testTimeouts` (ImageLoadingTests) |
+| C-17 | PASSING | DocumentRenderer.swift, HarnessCases.swift, MathViews.swift, RenderMetrics.swift | `testScanCorpusOrderAndDeterminism` (HarnessTests); `testManifestRules` (HarnessTests); `testRenderOneConditions` (HarnessTests); `testRendererProducesPageBitmap` (RhythmAndDisplayMathTests); `testPixelMismatch` (MetricsTests); `testInkBounds` (MetricsTests) |
+| C-18 | PASSING | ArticleTheme.swift, ArticleView.swift, BookmarksManager.swift, ChromeModel.swift, ColumnWidth.swift, DocumentRootView.swift, DocumentSession.swift, MathViews.swift, PlaceholderStore.swift, SidebarViews.swift, WindowAccessor.swift | `testHostedWindowSnapshots` (ChromeSnapshotTests); `testBlockInsetIsMaxOfBottomAndTop` (RhythmAndDisplayMathTests); `testBookmarkMenuOrderAndEnablement` (ChromeModelTests); `testMetricsTable` (ChromeModelTests); `testRowStyleOverAllThemes` (ChromeModelTests); `testWindowTitleAndScheme` (ChromeModelTests); `testRowRules` (ChromeModelTests); `testToolbarSpec` (ChromeModelTests); `testSidebarFocusRule` (ChromeModelTests); `testAppearanceAssignmentIsIdempotent` (ChromeModelTests); `testOwnParagraphEmission` (MathContractTests); `testDeleteRowTransitions` (SessionTests) |
+| I-001 | PASSING | DocumentRenderer.swift, HarnessCases.swift, ImageLoading.swift | `testScanCorpusOrderAndDeterminism` (HarnessTests) |
+| I-002 | PASSING | ContentLimits.swift, PipelineProbe.swift | `testRejectedLatexFallsBackWithMessage` (MathRenderTests); `testUnsupportedTypesAndParseErrorsFallBack` (MermaidTests) |
+| I-003 | PASSING | Diagnostics.swift, ImageLoading.swift | `testSessionEmitsNoContentLines` (DiagnosticsTests); `testDiagnosticsEvents` (MiscContractTests) |
+| I-004 | PASSING | ParsedDocument.swift | `testOneBlockIndexEverywhere` (SessionTests); `testEqualityOnRaw` (SplitTests) |
+| I-005 | PASSING | MDVMermaidDiagramView.swift, MDVMermaidPipeline.swift | `testDisplaySizeAndRaster` (MermaidTests) |
+| I-006 | PASSING | Database.swift | `testOpenCreatesSchemaV4` (PersistenceTests); `testConcurrentWritesLeaveWholeRows` (PersistenceTests) |
+| I-007 | PASSING | Database.swift | `testMigrationIsAtomic` (PersistenceTests); `testScrollPositions` (PersistenceTests); `testConcurrentWritesLeaveWholeRows` (PersistenceTests) |
+| I-008 | PASSING | MathImageCache.swift | `testImagesAreBitmapBacked` (MathRenderTests); `testIdleMathCPU` (BuildAndLauncherTests) |
+| I-009 | PASSING | MDVMermaidPipeline.swift, MermaidMathNodes.swift, RenderMetrics.swift | `testMathNodes` (MermaidTests); `testInkMetric` (MetricsTests); `testInkRatioRule` (MetricsTests) |
+| I-010 | PASSING | HeadingSlug.swift, MathMarkdown.swift | `testPlainText` (MathContractTests); `testTOCHeadings` (SplitTests); `testHeadingSlug` (SplitTests) |
+| I-011 | PASSING | — | `testVendoredSwiftMathInventory` (BuildAndLauncherTests) |
+| I-012 | PASSING | SmartTypography.swift | `testExclusionsInsideProse` (TypographyTests); `testBlocksReturnedUnchanged` (TypographyTests); `testMathRewrittenBeforeSmartening` (TypographyTests) |
+| I-013 | PASSING | HistoryManager.swift | `testHistoryCodec` (MiscContractTests); `testHistoryAddSelectRemove` (PersistenceTests) |
+| I-014 | PASSING | ArticleTheme.swift, ArticleView.swift, DocumentRenderer.swift, RenderMetrics.swift, ThemeManager.swift | `testBlockInsetIsMaxOfBottomAndTop` (RhythmAndDisplayMathTests); `testRhythmBandSevillaAndCharcoal` (RhythmAndDisplayMathTests); `testInkRowsAndGaps` (MetricsTests); `testRhythmBand` (MetricsTests); `testPerThemeValues` (ThemeTests) |
+| I-015 | PASSING | ChromeModel.swift, SidebarViews.swift | `testHostedWindowSnapshots` (ChromeSnapshotTests); `testRowStyleOverAllThemes` (ChromeModelTests); `testCrossThemeRules` (ThemeTests) |
+| K-01 | PASSING | — | `testBuiltBundleLayoutAndSignature` (BuildAndLauncherTests) |
+| K-02 | PASSING | — | `testBuiltBundleLayoutAndSignature` (BuildAndLauncherTests) |
+| K-03 | PASSING | BookmarksManager.swift, FTSQuery.swift, HistoryManager.swift | `testFTSQueryConstruction` (MiscContractTests); `testEqualRankOrderingAndLimit` (PersistenceTests) |
+| K-04 | PASSING | ChromeModel.swift, DocumentRootView.swift, Preferences.swift, SidebarViews.swift, ZoomStep.swift | `testPaneClamps` (ChromeModelTests); `testZoomStep` (MiscContractTests); `testPreferencesDefaultsAndFallbacks` (PersistenceTests) |
+| K-05 | PASSING | CodeLanguage.swift, CodeRenderer.swift | `testAllGrammarsAndQueriesLoad` (CodeRendererTests); `testNineLanguagesColourAndUnknownIsPlain` (CodeRendererTests); `testLanguageResolution` (MiscContractTests) |
+| K-06 | PASSING | Anchors.swift, BookmarkTitle.swift, DocumentSession.swift, FileSystem.swift, FileWatcher.swift, HistoryManager.swift, SessionClock.swift, ZoomStep.swift | `testScrollRestorable` (AnchorTests); `testBookmarkTitle` (AnchorTests); `testIndexMtimeGateAndLaunchReindex` (PersistenceTests); `testCopySectionFlash` (SessionTests); `testRealFileWatcherCoalesces` (SessionTests) |
+| K-07 | PASSING | ColumnWidth.swift, MDVMermaidDiagramView.swift, MDVMermaidPipeline.swift | `testConstants` (MermaidTests); `testColumnWidthFormula` (MiscContractTests) |
+| K-08 | PASSING | MDVMermaidPipeline.swift, MathImageCache.swift, MathMarkdown.swift, MathSpec.swift, MermaidMathNodes.swift, MermaidRepairs.swift | `testTextVsDisplayMode` (MathRenderTests); `testSequenceRepairs` (MermaidTests); `testMathNodes` (MermaidTests); `testSpanDetection` (MathContractTests) |
+| K-09 | PASSING | Anchors.swift, FTSQuery.swift | `testFingerprintNormalisation` (AnchorTests) |
+| K-10 | PASSING | ArticleView.swift, ThemeManager.swift | `testDefaults` (ThemeTests) |
+| K-11 | PASSING | — | `testDistRefusesWithoutExactTag` (BuildAndLauncherTests); `testTaggedCheckoutNamesArtefactsFromTag` (BuildAndLauncherTests) |
+| K-12 | PASSING | — | `testBuiltBundleLayoutAndSignature` (BuildAndLauncherTests) |
+| K-13 | PASSING | ArticleView.swift, ColumnWidth.swift | `testMermaidWidthPlumbing` (ArticleTests); `testColumnWidthFormula` (MiscContractTests) |
+| K-14 | PASSING | ContentLimits.swift, DocumentSession.swift, FileSystem.swift, ImageLoading.swift, ImageProviders.swift, MDVMermaidPipeline.swift, MathImageCache.swift | `testDecodingCeilings` (ImageLoadingTests); `testLatexCeiling` (MathRenderTests); `testMermaidCeiling` (MermaidTests); `testContentLimits` (MiscContractTests); `testUnreadableKeepsPreviousDocument` (SessionTests) |
+| K-15 | PASSING | MathImageCache.swift | `testImagesAreBitmapBacked` (MathRenderTests); `testIdleMathCPU` (BuildAndLauncherTests) |
+| K-16 | PASSING | ChromeModel.swift, HarnessCases.swift, RenderMetrics.swift | `testRhythmBandSevillaAndCharcoal` (RhythmAndDisplayMathTests); `testMetricsTable` (ChromeModelTests); `testInkRowsAndGaps` (MetricsTests); `testRhythmBand` (MetricsTests); `testPerThemeValues` (ThemeTests) |
+| E-01 | PASSING | MDVMermaidPipeline.swift, MermaidRepairs.swift | `testNodeInTwoSubgraphsBelongsToLast` (MermaidTests) |
+| E-02 | PASSING | DocumentRenderer.swift, HarnessCases.swift, MDVMermaidDiagramView.swift, MDVMermaidPipeline.swift | `testScanCorpusOrderAndDeterminism` (HarnessTests); `testUnsupportedTypesAndParseErrorsFallBack` (MermaidTests) |
+| E-03 | PASSING | DocumentSession.swift | `testUnreadableKeepsPreviousDocument` (SessionTests) |
+| E-04 | PASSING | DocumentSession.swift | `testDirectoryLoads` (SessionTests) |
+| E-05 | PASSING | DocumentSession.swift | `testHandleLink` (SessionTests) |
+| E-06 | PASSING | DocumentSession.swift | `testHandleLink` (SessionTests) |
+| E-07 | PASSING | MathMarkdown.swift | `testNonMathDollarsAreLiteral` (MathContractTests) |
+| E-08 | PASSING | Anchors.swift, Database.swift, DocumentSession.swift | `testResolveAnchor` (AnchorTests); `testScrollRestorable` (AnchorTests); `testScrollPersistAndRestore` (SessionTests) |
+| E-09 | PASSING | BookmarksManager.swift, DocumentSession.swift, FileSystem.swift | `testBookmarksManager` (PersistenceTests); `testBookmarkCurrentSpot` (SessionTests) |
+| E-10 | PASSING | MathImageCache.swift, MathViews.swift | `testRejectedLatexFallsBackWithMessage` (MathRenderTests) |
+| E-11 | PASSING | ImageLoading.swift, ImageProviders.swift | `testLocalAndDataImages` (ImageLoadingTests); `testRemoteContract` (ImageLoadingTests) |
+| E-12 | PASSING | Database.swift, Diagnostics.swift | `testMigrationIsAtomic` (PersistenceTests); `testCorruptFileDegrades` (PersistenceTests) |
+| E-13 | PASSING | MermaidRepairs.swift | `testSequenceRepairs` (MermaidTests) |
+| E-14 | PASSING | MDVMermaidPipeline.swift | `testSanitisedDiagramRenders` (MermaidTests); `testColorNormalisation` (MermaidSanitizeTests) |
+| E-15 | PASSING | MDVMermaidPipeline.swift | `testXYChartSeriesRender` (MermaidTests); `testXYChartSeriesNames` (MermaidSanitizeTests) |
+| E-16 | PASSING | MathMarkdown.swift, MathViews.swift | `testOwnParagraphRegistry` (ArticleTests); `testDisplayMathSingleLineAndFence` (RhythmAndDisplayMathTests) |
+| E-17 | PASSING | ArticleView.swift, DocumentSession.swift, FindHighlight.swift | `testFindCountingAndHighlighting` (ArticleTests); `testBlockKindHelpers` (SplitTests) |
+| E-18 | PASSING | ChromeModel.swift, DocumentSession.swift, SidebarViews.swift | `testSidebarFocusRule` (ChromeModelTests); `testFindModel` (SessionTests) |
+| E-19 | PASSING | — | `testReloadRules` (SessionTests) |
+| E-20 | PASSING | — | `testTwoWindowsSamePathReloadIndependently` (SessionTests) |
+| E-21 | PASSING | DocumentSession.swift, FileWatcher.swift | `testReloadRules` (SessionTests) |
+| E-22 | PASSING | ParsedDocument.swift | `testHandleLink` (SessionTests); `testTOCHeadings` (SplitTests) |
+| E-23 | PASSING | ParsedDocument.swift | `testFenceKeepsBlankLinesAndClosesOnSameMarker` (SplitTests); `testIndentedCodeBlockSplitsAtBlankLine` (SplitTests) |
+| E-24 | PASSING | Database.swift, FTSQuery.swift | `testFTSQueryConstruction` (MiscContractTests) |
+| E-25 | PASSING | ArticleView.swift, DocumentSession.swift, MDVMermaidDiagramView.swift | `testRenderGenerationBumpsOnEveryDocumentChange` (SessionTests) |
+| E-26 | PASSING | AppModel.swift, DocumentRootView.swift, WindowAccessor.swift, mdv6App.swift | `testKeyWindowRouting` (SessionTests) |
+| E-27 | PASSING | DocumentSession.swift | `testBackForward` (SessionTests); `testPlaceholder` (SessionTests) |
+| E-28 | PASSING | ContentLimits.swift, DocumentRenderer.swift, ImageLoading.swift, MDVMermaidDiagramView.swift, MDVMermaidPipeline.swift, MathImageCache.swift | `testLatexCeiling` (MathRenderTests); `testMermaidCeiling` (MermaidTests); `testContentLimits` (MiscContractTests); `testUnreadableKeepsPreviousDocument` (SessionTests) |
+| E-29 | PASSING | DocumentSession.swift | `testTOCSelectionLifecycle` (SessionTests) |
+| E-30 | PASSING | WindowAccessor.swift, mdv6App.swift | `testOneWindowAfterQuitWithTwoWindows` (ChromeModelTests) |
+| T-01 | PASSING | — | `testBuiltBundleLayoutAndSignature` (BuildAndLauncherTests) |
+| T-02 | PASSING | — | `testDistRefusesWithoutExactTag` (BuildAndLauncherTests) |
+| T-03 | PASSING | — | `testLauncherSurface` (BuildAndLauncherTests); `testMultipleURLsLastDisplayed` (SessionTests) |
+| T-04 | PASSING | — | `testUnreadableKeepsPreviousDocument` (SessionTests) |
+| T-05 | PASSING | — | `testRendererProducesPageBitmap` (RhythmAndDisplayMathTests) |
+| T-06 | PASSING | — | `testNineLanguagesColourAndUnknownIsPlain` (CodeRendererTests); `testLanguageResolution` (MiscContractTests); `testPromptAwareFences` (MiscContractTests) |
+| T-07 | PASSING | — | `testTextVsDisplayMode` (MathRenderTests); `testRewritesAndSymbolsTypeset` (MathRenderTests); `testRejectedLatexFallsBackWithMessage` (MathRenderTests); `testNonMathDollarsAreLiteral` (MathContractTests); `testSpanDetection` (MathContractTests); `testPreprocessRewrites` (MathContractTests) |
+| T-08 | PASSING | — | `testBookmarkTitle` (AnchorTests); `testPlainText` (MathContractTests); `testTOCHeadings` (SplitTests); `testStripInlineMarkdown` (SplitTests) |
+| T-09 | PASSING | — | `testLocalAndDataImages` (ImageLoadingTests) |
+| T-10 | PASSING | — | `testSmartTypographyOptOuts` (ThemeTests); `testProseIsSmartened` (TypographyTests); `testExclusionsInsideProse` (TypographyTests); `testBlocksReturnedUnchanged` (TypographyTests) |
+| T-11 | PASSING | — | `testZoomStep` (MiscContractTests) |
+| T-12 | PASSING | — | `testResolution` (ThemeTests) |
+| T-13 | PASSING | RenderMetrics.swift | `testScanCorpusOrderAndDeterminism` (HarnessTests); `testUnsupportedTypesAndParseErrorsFallBack` (MermaidTests); `testPixelMismatch` (MetricsTests) |
+| T-14 | PASSING | — | `testNodeInTwoSubgraphsBelongsToLast` (MermaidTests) |
+| T-15 | PASSING | — | `testSanitisedDiagramRenders` (MermaidTests); `testFrontMatterDropped` (MermaidSanitizeTests); `testColorNormalisation` (MermaidSanitizeTests); `testParallelogramsExpanded` (MermaidSanitizeTests); `testFormattingTagsStripped` (MermaidSanitizeTests); `testSanitizeAppliesAllRulesInOrder` (MermaidSanitizeTests) |
+| T-16 | PASSING | — | `testXYChartSeriesRender` (MermaidTests); `testXYChartSeriesNames` (MermaidSanitizeTests) |
+| T-17 | PASSING | HarnessCases.swift, RenderMetrics.swift | `testMetricCasesPass` (HarnessTests); `testMathNodes` (MermaidTests); `testInkMetric` (MetricsTests) |
+| T-18 | PASSING | — | `testMermaidWidthPlumbing` (ArticleTests); `testColumnWidthFormula` (MiscContractTests) |
+| T-19 | PASSING | HarnessCases.swift, RenderMetrics.swift | `testMetricCasesPass` (HarnessTests); `testSequenceRepairs` (MermaidTests); `testPixelMismatch` (MetricsTests) |
+| T-20 | PASSING | — | `testStateDescriptionsAndClassDefs` (MermaidTests); `testStateDescriptionsMerged` (MermaidSanitizeTests) |
+| T-21 | PASSING | — | `testStyleMenuPersistenceAndExport` (MermaidTests) |
+| T-22 | PASSING | — | `testBackForward` (SessionTests); `testHandleLink` (SessionTests); `testHeadingSlug` (SplitTests) |
+| T-23 | PASSING | — | `testFindCountingAndHighlighting` (ArticleTests) |
+| T-24 | PASSING | — | `testFTSQueryConstruction` (MiscContractTests); `testIndexAndSearch` (PersistenceTests); `testEqualRankOrderingAndLimit` (PersistenceTests); `testIndexMtimeGateAndLaunchReindex` (PersistenceTests) |
+| T-25 | PASSING | — | `testHistoryCodec` (MiscContractTests); `testHistoryAddSelectRemove` (PersistenceTests); `testAddingVersusSelectingRoutes` (SessionTests); `testDeleteRowTransitions` (SessionTests) |
+| T-26 | PASSING | — | `testFingerprintNormalisation` (AnchorTests); `testResolveAnchor` (AnchorTests); `testBookmarkTitle` (AnchorTests); `testBookmarkRows` (PersistenceTests); `testBookmarksManager` (PersistenceTests) |
+| T-27 | PASSING | — | `testPlaceholderStoreIsTransient` (PersistenceTests); `testPlaceholder` (SessionTests) |
+| T-28 | PASSING | — | `testOneWindowAfterQuitWithTwoWindows` (ChromeModelTests); `testScrollPositions` (PersistenceTests); `testScrollPersistAndRestore` (SessionTests); `testStartup` (SessionTests) |
+| T-29 | PASSING | — | `testRealFileWatcherCoalesces` (SessionTests) |
+| T-30 | PASSING | — | `testCopySectionFlash` (SessionTests); `testOneBlockIndexEverywhere` (SessionTests); `testSectionRange` (SplitTests) |
+| T-31 | PASSING | — | `testPaneClamps` (ChromeModelTests); `testPreferencesDefaultsAndFallbacks` (PersistenceTests) |
+| T-32 | PASSING | — | `testIdleMathCPU` (BuildAndLauncherTests) |
+| T-33 | PASSING | — | `testCorruptFileDegrades` (PersistenceTests); `testConcurrentWritesLeaveWholeRows` (PersistenceTests) |
+| T-34 | PASSING | — | `testVendoredSwiftMathInventory` (BuildAndLauncherTests) |
+| T-35 | PASSING | — | `testTwoWindowsSamePathReloadIndependently` (SessionTests) |
+| T-36 | PASSING | — | `testNoOtherLogCallSites` (DiagnosticsTests); `testSessionEmitsNoContentLines` (DiagnosticsTests) |
+| T-37 | PASSING | — | `testSwiftAndSQLCaptureClasses` (CodeRendererTests); `testLanguageResolution` (MiscContractTests) |
+| T-38 | PASSING | — | `testHelpOverwrittenEveryTime` (SessionTests); `testEditorOutcomes` (SessionTests) |
+| T-39 | PASSING | — | `testUnreadableKeepsPreviousDocument` (SessionTests); `testBlankLineSplitsAndEmptiesDropped` (SplitTests); `testFenceKeepsBlankLinesAndClosesOnSameMarker` (SplitTests); `testMathFenceSpansBlankLines` (SplitTests); `testIndentedCodeBlockSplitsAtBlankLine` (SplitTests); `testLineEndingsNormalised` (SplitTests) |
+| T-40 | PASSING | — | `testKeyWindowRouting` (SessionTests) |
+| T-41 | PASSING | PipelineProbe.swift | `testDecodingCeilings` (ImageLoadingTests); `testRemoteContract` (ImageLoadingTests); `testMermaidCeiling` (MermaidTests); `testContentLimits` (MiscContractTests) |
+| T-42 | PASSING | — | `testPreferencesDefaultsAndFallbacks` (PersistenceTests); `testResolution` (ThemeTests) |
+| T-43 | PASSING | — | `testDistRefusesWithoutExactTag` (BuildAndLauncherTests); `testTaggedCheckoutNamesArtefactsFromTag` (BuildAndLauncherTests) |
+| T-44 | PASSING | — | `testHostedWindowSnapshots` (ChromeSnapshotTests); `testRowStyleOverAllThemes` (ChromeModelTests) |
+| T-45 | PASSING | HarnessCases.swift, RenderMetrics.swift | `testMetricCasesPass` (HarnessTests); `testRhythmBandSevillaAndCharcoal` (RhythmAndDisplayMathTests); `testInkRowsAndGaps` (MetricsTests); `testRhythmBand` (MetricsTests) |
+| T-46 | PASSING | HarnessCases.swift, RenderMetrics.swift | `testMetricCasesPass` (HarnessTests); `testDisplayMathSingleLineAndFence` (RhythmAndDisplayMathTests); `testSpanDetection` (MathContractTests); `testOwnParagraphEmission` (MathContractTests); `testInkBounds` (MetricsTests) |
+| T-47 | PASSING | — | `testWindowTitleAndScheme` (ChromeModelTests); `testDeleteRowTransitions` (SessionTests) |
+| T-48 | PASSING | — | `testBookmarkMenuOrderAndEnablement` (ChromeModelTests); `testReorderFollowsSlots` (ChromeModelTests); `testBookmarksManager` (PersistenceTests) |
+## 7. Verdict
+
+```text
+Spec coverage: 169/169 IDs realized (0 deferred)
+speccheck (mock): speccheck: CONFORMING - 169/169 passing (100.0%), 0 failing, 0 skipped, 0 weak, 0 unverified, 0 untested, 0 uncited; 0 dangling, 0 stale; judge=mock
+speccheck (llm):  speccheck: CONFORMING - 169/169 passing (100.0%), 0 failing, 0 skipped, 0 weak, 0 unverified, 0 untested, 0 uncited; 0 dangling, 0 stale; judge=llm — openai/gpt-4o-mini via OpenRouter, unknown_rate 0.0
+Observed: T-44 build/observed/T-44-sevilla.png (+charcoal, twilight, states) — anatomy matches reference/MDV-ORIGINAL-SEVILLA.png; agent looked, person's look pending; Esc-hide clause not exercised
+          T-45 measured (testRhythmBandSevillaAndCharcoal, spec bands) — pass;  T-46 measured (centred, .display height) — pass
+          T-47 build/observed/T-47-first.png, T-47-second-window.png, T-47-empty-title.png — titles follow each window's file, revert to mdv6; person's look pending
+          T-48 build/observed/T-48-stripe-*.png, T-48-third-moved-up.png, T-48-moved-to-bottom.png, T-48-removed.png, T-48-relaunch-order.png — stripe and reorder states; menus proved in swift test; hover chevron / menu presentation not exercised
+          T-43 PENDING: no Developer ID identity, notary profile or vX.Y.Z tag on this host (tag gate and chain dry-run proved)
+Readiness: BUILT
+Conformance: VERIFICATION PENDING
+```
+
+The build is complete and mechanically conforming; the verdict becomes PASS when a person has looked at the T-44/T-47/T-48 snapshots (or the running app) and the two pointer/keystroke clauses have been exercised on a permitted console, and PASS WITH NOTES until T-43's credentialed run is done on a tagged release checkout.
