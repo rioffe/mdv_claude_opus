@@ -1,0 +1,11 @@
+sequenceDiagram
+  autonumber
+  participant A as Alice<br>Wonderland
+  participant B as Bob
+  A->>B: single line
+  B->>A: first line<br>second line<br>third line
+  A->>A: think<br>hard
+  loop retries
+    A->>B: quick
+    Note over B: final note<br>with two lines
+  end

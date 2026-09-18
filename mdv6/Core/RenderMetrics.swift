@@ -34,9 +34,8 @@ public struct Bitmap: Equatable {
         ctx.draw(cg, in: CGRect(x: -crop.minX, y: CGFloat(h) - (imageH - crop.minY), width: CGFloat(cg.width), height: imageH))
         guard let data = ctx.data else { return nil }
         let buf = data.bindMemory(to: UInt8.self, capacity: w * h * 4)
-        var rgba = [UInt8](repeating: 0, count: w * h * 4)
-        for y in 0..<h { for i in 0..<(w * 4) { rgba[y * w * 4 + i] = buf[(h - 1 - y) * w * 4 + i] } }   // flip to top-left rows
-        self.init(width: w, height: h, rgba: rgba)
+        // a CGBitmapContext stores its first memory row as the top row of the image: rows are already top-to-bottom
+        self.init(width: w, height: h, rgba: Array(UnsafeBufferPointer(start: buf, count: w * h * 4)))
     }
 
     /// Rec. 601 luminance of a pixel, in [0, 255].

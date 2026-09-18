@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "note": "C-17 manifest. The metric cases (ink, sequence-layout, rhythm, display-math) are the oracles: they compare against measured quantities from SPEC.md §7.1, §7.2 and K-16. The pixel cases are regression guards only: their goldens were produced by this pipeline on the build host (macOS 26.6, 2x) and certify stability, not correctness. Regenerate with tools/update-goldens.sh.",
+  "cases": [
+    { "id": "mermaid-math-ink", "input": "test-docs/mermaid/math.mmd", "kind": "mermaid", "width": 860, "scale": 2, "expect": "render", "metric": "ink" },
+    { "id": "sequence-layout", "input": "test-docs/mermaid/sequence.mmd", "kind": "mermaid", "width": 860, "scale": 2, "expect": "render", "metric": "sequence-layout" },
+    { "id": "rhythm-sevilla", "input": "test-docs/rhythm.md", "kind": "markdown", "width": 860, "scale": 2, "expect": "render", "theme": "sevilla", "metric": "rhythm" },
+    { "id": "rhythm-charcoal", "input": "test-docs/rhythm.md", "kind": "markdown", "width": 860, "scale": 2, "expect": "render", "theme": "charcoal", "metric": "rhythm" },
+    { "id": "display-math-single-vs-fence", "input": "test-docs/display-math.md", "kind": "markdown", "width": 860, "scale": 2, "expect": "render", "metric": "display-math" },
+    { "id": "flowchart-pixel", "input": "test-docs/mermaid/flowchart.mmd", "kind": "mermaid", "width": 860, "scale": 2, "expect": "render", "golden": "test-docs/goldens/flowchart-pixel.png", "metric": "pixel" },
+    { "id": "two-subgraphs-pixel", "input": "test-docs/mermaid/two-subgraphs.mmd", "kind": "mermaid", "width": 860, "scale": 2, "expect": "render", "golden": "test-docs/goldens/two-subgraphs-pixel.png", "metric": "pixel" },
+    { "id": "sanitised-pixel", "input": "test-docs/mermaid/sanitised.mmd", "kind": "mermaid", "width": 860, "scale": 2, "expect": "render", "golden": "test-docs/goldens/sanitised-pixel.png", "metric": "pixel" },
+    { "id": "xychart-pixel", "input": "test-docs/mermaid/xychart.mmd", "kind": "mermaid", "width": 860, "scale": 2, "expect": "render", "golden": "test-docs/goldens/xychart-pixel.png", "metric": "pixel" },
+    { "id": "state-pixel", "input": "test-docs/mermaid/state.mmd", "kind": "mermaid", "width": 860, "scale": 2, "expect": "render", "golden": "test-docs/goldens/state-pixel.png", "metric": "pixel" },
+    { "id": "sequence-pixel", "input": "test-docs/mermaid/sequence.mmd", "kind": "mermaid", "width": 860, "scale": 2, "expect": "render", "golden": "test-docs/goldens/sequence-pixel.png", "metric": "pixel" },
+    { "id": "class-pixel", "input": "test-docs/mermaid/class.mmd", "kind": "mermaid", "width": 860, "scale": 2, "expect": "render", "golden": "test-docs/goldens/class-pixel.png", "metric": "pixel" },
+    { "id": "er-pixel", "input": "test-docs/mermaid/er.mmd", "kind": "mermaid", "width": 860, "scale": 2, "expect": "render", "golden": "test-docs/goldens/er-pixel.png", "metric": "pixel" },
+    { "id": "math-pixel", "input": "test-docs/mermaid/math.mmd", "kind": "mermaid", "width": 860, "scale": 2, "expect": "render", "golden": "test-docs/goldens/math-pixel.png", "metric": "pixel" },
+    { "id": "unsupported-timeline", "input": "test-docs/mermaid/unsupported-timeline.mmd", "kind": "mermaid", "expect": "fallback" },
+    { "id": "unsupported-gantt", "input": "test-docs/mermaid/unsupported-gantt.mmd", "kind": "mermaid", "expect": "fallback" },
+    { "id": "unsupported-pie", "input": "test-docs/mermaid/unsupported-pie.mmd", "kind": "mermaid", "expect": "fallback" },
+    { "id": "unsupported-mindmap", "input": "test-docs/mermaid/unsupported-mindmap.mmd", "kind": "mermaid", "expect": "fallback" }
+  ]
+}

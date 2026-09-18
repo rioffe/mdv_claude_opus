@@ -123,8 +123,10 @@ public enum MathMarkdown {
         var cursor = block.startIndex
         for span in found {
             out += block[cursor..<span.range.lowerBound]
-            let ref = "![](" + url(for: span, size: size, color: color) + ")"
+            let spanURL = url(for: span, size: size, color: color)
+            let ref = "![](" + spanURL + ")"
             if span.ownParagraph {
+                registerOwnParagraph(spanURL)
                 // keep the indentation of the opener's line; separate the image paragraph with blank lines
                 var indent = ""
                 var k = span.range.lowerBound
@@ -144,6 +146,19 @@ public enum MathMarkdown {
         }
         out += block[cursor...]
         return out
+    }
+
+    /// C-07.1 placement: the URLs `rewrite` emitted as their own paragraph (centred by `MathDisplayView`); every other
+    /// display URL that reaches the block-image path is an E-16 image-only paragraph (list item, table cell) and stays
+    /// leading-aligned. Keyed by the full URL (latex, mode, size, colour).
+    private static let ownParagraphLock = NSLock()
+    nonisolated(unsafe) private static var ownParagraphURLs = Set<String>()
+
+    static func registerOwnParagraph(_ url: String) { ownParagraphLock.lock(); ownParagraphURLs.insert(url); ownParagraphLock.unlock() }
+
+    public static func isOwnParagraph(url: URL) -> Bool {
+        ownParagraphLock.lock(); defer { ownParagraphLock.unlock() }
+        return ownParagraphURLs.contains(url.absoluteString)
     }
 
     /// `mdv6-math://inline|display/<base64url(latex)>?s=<size, 1 decimal>&c=<RRGGBBAA>`.
