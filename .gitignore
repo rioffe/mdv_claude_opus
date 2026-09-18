@@ -1,0 +1,8 @@
+.build/
+build/
+dist/
+build_icon/
+junit.xml
+junit-swift-testing.xml
+*.xcodeproj
+.DS_Store

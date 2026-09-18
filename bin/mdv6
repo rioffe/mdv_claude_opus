@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# mdv6 — open Markdown files in the mdv6 application (R-33, §5.2).
+#
+# usage: mdv6 [FILE... | DIR | -]
+#        mdv6 --version | -h | --help
+#   FILE...   open each file (absolute or relative) in the running application; the last is displayed
+#   DIR       open a directory: README.md or the first Markdown file, siblings listed in history
+#   -         read Markdown from stdin into a temporary .md file and open it (sole argument only)
+#   MDV6_APP  overrides the bundle location (a directory); otherwise /Applications, ~/Applications,
+#             the checkout's build/, then Spotlight are searched
+set -u
+
+find_app() {
+  if [ -n "${MDV6_APP:-}" ] && [ -d "$MDV6_APP" ]; then echo "$MDV6_APP"; return 0; fi
+  [ -d /Applications/mdv6.app ] && { echo /Applications/mdv6.app; return 0; }
+  [ -d "$HOME/Applications/mdv6.app" ] && { echo "$HOME/Applications/mdv6.app"; return 0; }
+  local here; here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  [ -d "$here/../build/mdv6.app" ] && { echo "$(cd "$here/../build/mdv6.app" && pwd)"; return 0; }
+  [ -d "$here/../mdv6.app" ] && { echo "$(cd "$here/../mdv6.app" && pwd)"; return 0; }
+  local found; found="$(mdfind "kMDItemCFBundleIdentifier == 'com.mdv6.app'" 2>/dev/null | head -n 1)"
+  [ -n "$found" ] && [ -d "$found" ] && { echo "$found"; return 0; }
+  return 1
+}
+
+APP="$(find_app)" || { echo "mdv6: mdv6.app not found (set MDV6_APP or install to /Applications)" >&2; exit 1; }
+
+if [ $# -eq 0 ]; then open "$APP"; exit $?; fi
+
+case "$1" in
+  -h|--help)
+    sed -n '2,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    exit 0 ;;
+  --version)
+    /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist"
+    exit $? ;;
+esac
+
+if [ $# -eq 1 ] && [ "$1" = "-" ]; then
+  tmp="$(mktemp -t mdv6-stdin).md"
+  cat > "$tmp"
+  open -a "$APP" "$tmp"
+  exit $?
+fi
+
+paths=()
+for arg in "$@"; do
+  if [ ! -e "$arg" ]; then echo "mdv6: no such file: $arg" >&2; exit 1; fi
+  case "$arg" in
+    /*) paths+=("$arg") ;;
+    *)  paths+=("$(cd "$(dirname "$arg")" && pwd)/$(basename "$arg")") ;;
+  esac
+done
+open -a "$APP" "${paths[@]}"

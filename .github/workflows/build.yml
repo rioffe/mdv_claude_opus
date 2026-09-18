@@ -1,0 +1,47 @@
+name: build
+# R-37 / §5.3: build debug and release on macos-15 for every push to main, every pull request and manual dispatch;
+# run the swift test suite; verify the C-13 bundle layout; upload the release tarball; on a push to main only,
+# publish it as the rolling `latest` prerelease.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: Test
+        run: swift test --parallel --xunit-output junit.xml
+      - name: Build debug
+        run: ./build.sh debug
+      - name: Build release
+        run: ./build.sh release
+      - name: Verify bundle layout (C-13)
+        run: |
+          set -e
+          for f in Contents/MacOS/mdv6 Contents/Info.plist Contents/Resources/AppIcon.icns Contents/Resources/mdv6 \
+                   Contents/Resources/Help.md Contents/Resources/mathFonts.bundle/latinmodern-math.otf; do
+            [ -e "build/mdv6.app/$f" ] || { echo "missing $f"; exit 1; }
+          done
+          [ "$(ls build/mdv6.app)" = "Contents" ]
+          ls build/mdv6.app/Contents/Resources/*.otf | grep -q Alegreya
+          ls build/mdv6.app/Contents/Resources/*-highlights.scm | grep -q swift
+          codesign --verify --deep --strict build/mdv6.app
+      - name: Package
+        run: tar czf mdv6-release.tar.gz -C build mdv6.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mdv6-release
+          path: mdv6-release.tar.gz
+      - name: Publish rolling latest prerelease
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest mdv6-release.tar.gz --prerelease --title "latest (${GITHUB_SHA::7})" --notes "Rolling build of main."
