@@ -33,6 +33,16 @@ public struct CodePalette: Equatable, Sendable {
         return plain
     }
 
+    /// Whether any component prefix of the capture name has a palette entry.
+    public func knows(capture: String) -> Bool {
+        var parts = capture.split(separator: ".").map(String.init)
+        while !parts.isEmpty {
+            if captures[parts.joined(separator: ".")] != nil { return true }
+            parts.removeLast()
+        }
+        return false
+    }
+
     /// C-05: `comment` captures are italic.
     public func isItalic(capture: String) -> Bool { capture == "comment" || capture.hasPrefix("comment.") }
 

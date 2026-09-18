@@ -2,6 +2,7 @@
 // fraction q (T-13, T-19), and the K-16 ink-row gap and band for the vertical-rhythm invariant (I-014, T-45, T-46).
 import Foundation
 import CoreGraphics
+import AppKit
 
 /// A straight RGBA8 bitmap (row-major, 4 bytes per pixel).
 public struct Bitmap: Equatable {
@@ -17,6 +18,25 @@ public struct Bitmap: Equatable {
     public func pixel(_ x: Int, _ y: Int) -> (r: UInt8, g: UInt8, b: UInt8, a: UInt8) {
         let o = (y * width + x) * 4
         return (rgba[o], rgba[o + 1], rgba[o + 2], rgba[o + 3])
+    }
+
+    /// A crop of an `NSImage` in raster pixels (top-left origin), composited on white when `onWhite`; nil when the image has
+    /// no bitmap. Pixels outside the image read as white.
+    public init?(image: NSImage, crop: CGRect, onWhite: Bool) {
+        guard let cg = (image.representations.first as? NSBitmapImageRep)?.cgImage ?? image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let w = Int(crop.width.rounded()), h = Int(crop.height.rounded())
+        guard w > 0, h > 0, let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                                 space: CGColorSpaceCreateDeviceRGB(),
+                                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue) else { return nil }
+        if onWhite { ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1)); ctx.fill(CGRect(x: 0, y: 0, width: w, height: h)) }
+        // image pixel (0,0) is top-left; the context origin is bottom-left
+        let imageH = CGFloat(cg.height)
+        ctx.draw(cg, in: CGRect(x: -crop.minX, y: CGFloat(h) - (imageH - crop.minY), width: CGFloat(cg.width), height: imageH))
+        guard let data = ctx.data else { return nil }
+        let buf = data.bindMemory(to: UInt8.self, capacity: w * h * 4)
+        var rgba = [UInt8](repeating: 0, count: w * h * 4)
+        for y in 0..<h { for i in 0..<(w * 4) { rgba[y * w * 4 + i] = buf[(h - 1 - y) * w * 4 + i] } }   // flip to top-left rows
+        self.init(width: w, height: h, rgba: rgba)
     }
 
     /// Rec. 601 luminance of a pixel, in [0, 255].
