@@ -34,9 +34,13 @@ final class RhythmAndDisplayMathTests: XCTestCase {
         XCTAssertEqual(ArticleBlockView<StaticArticleHost>.blockInset(theme: c, previous: "# A", current: "para"), 14)
     }
 
-    /// C-17: `DocumentRenderer` yields a bitmap at `width × scale` on the page colour.
+    /// C-17: `DocumentRenderer` yields a bitmap at `width × scale` on the page colour; R-07, T-05: `test-docs/syntax.md`
+    /// (tables, task lists, footnotes, strikethrough, autolinks) renders through cmark-gfm without error and with ink.
     func testRendererProducesPageBitmap() throws {
         let b = try render("one paragraph.", theme: .highContrast)
+        let syntax = try String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("test-docs/syntax.md"), encoding: .utf8)
+        let page = try render(syntax, theme: .sevilla)
+        XCTAssertGreaterThan(RenderMetrics.inkBands(page, page: MDVTheme.sevilla.rgba.background).count, 20)
         XCTAssertEqual(b.width, 1720)
         let corner = b.pixel(2, 2)
         XCTAssertEqual(corner.r, MDVTheme.highContrast.rgba.background.r)

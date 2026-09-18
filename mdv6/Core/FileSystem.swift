@@ -62,6 +62,10 @@ public final class FileSystem {
         get { fake?.mtimes ?? [:] }
         set { fake?.mtimes = newValue }
     }
+    public var directories: Set<String> {
+        get { fake?.directories ?? [] }
+        set { fake?.directories = newValue }
+    }
     private var fake: Fake?
 
     public static func fake(files: [String: String], mtime: Int) -> FileSystem {

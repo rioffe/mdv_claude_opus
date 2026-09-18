@@ -7,6 +7,7 @@ import AppKit
 import MarkdownUI
 
 /// What the article reads from its owner (R-42 rhythm inputs, R-24 find, R-22 copy, R-27/R-28 hover anchor).
+@MainActor
 public protocol ArticleHost: ObservableObject {
     var document: ParsedDocument? { get }
     var theme: MDVTheme { get }

@@ -47,7 +47,7 @@ final class ImageLoadingTests: XCTestCase {
         guard case .failed = ImageDecoding.decode(data: Data("not an image".utf8)) else { return XCTFail() }
     }
 
-    /// R-16, E-11: relative paths resolve against the document's directory; a missing file names the placeholder; `data:` URIs decode.
+    /// R-16, E-11, T-09, C-14: relative paths resolve against the document's directory; a missing file names the placeholder; `data:` URIs decode.
     func testLocalAndDataImages() {
         try! png(width: 8, height: 8).write(to: dir.appendingPathComponent("local.png"))
         guard case .image = ImageDecoding.local(url: URL(string: "assets/../local.png")!, base: dir) else { return XCTFail("local") }

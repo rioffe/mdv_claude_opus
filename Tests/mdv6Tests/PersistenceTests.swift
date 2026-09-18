@@ -339,7 +339,7 @@ final class PersistenceTests: XCTestCase {
 
     // MARK: Preferences (C-04, R-32, T-42)
 
-    /// C-04: every key, its default, and the invalid-value fallbacks — wrong type, out of range, unknown ids, malformed history. T-42, R-32.
+    /// C-04, T-31 (clamps), K-04: every key, its default, and the invalid-value fallbacks — wrong type, out of range, unknown ids, malformed history. T-42, R-32.
     func testPreferencesDefaultsAndFallbacks() {
         let p = Preferences(defaults: defaults())
         XCTAssertEqual(p.themeId, "high-contrast"); XCTAssertEqual(p.fontScale, 1.0); XCTAssertTrue(p.smartTypography)
@@ -377,6 +377,7 @@ final class PersistenceTests: XCTestCase {
         d.set(9.0, forKey: "mdv6_font_scale"); XCTAssertEqual(Preferences(defaults: defaults()).fontScale, 2.5)
         d.set(100, forKey: "mdv6_inspector_width"); XCTAssertEqual(Preferences(defaults: defaults()).inspectorWidth, 180)
         XCTAssertEqual(Preferences.inspectorWidthRange, 180...520); XCTAssertEqual(Preferences.minimumBookmarksHeight, 120)
+        XCTAssertEqual(Preferences.sidebarWidthRange, 180...400)
     }
 
     // MARK: AppModel.bootstrap (§10)

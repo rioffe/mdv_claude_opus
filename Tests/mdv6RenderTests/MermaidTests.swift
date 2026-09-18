@@ -35,7 +35,8 @@ final class MermaidTests: XCTestCase {
         XCTAssertEqual(MDVMermaidPipeline.normalizeSubgraphOwnership(nodeIds: [["A", "PD"], ["PD", "B"]]), [["A"], ["PD", "B"]])
     }
 
-    /// T-13, E-02, R-10: the unsupported types and any parse error throw so the view shows the fallback; nothing crashes.
+    /// T-13, E-02, R-10, R-36, I-002, C-14: the unsupported types and any parse error throw so the view shows the fallback in
+    /// place (never modally); nothing crashes.
     func testUnsupportedTypesAndParseErrorsFallBack() {
         for src in ["timeline\n  title X\n  2020 : a", "gantt\n  title G", "pie\n  \"a\" : 1", "mindmap\n  root", "gitGraph\n  commit",
                     "journey\n  title J", "quadrantChart\n  title Q"] {
@@ -151,7 +152,8 @@ final class MermaidTests: XCTestCase {
         XCTAssertEqual(mirror.redComponent, bg.redComponent, accuracy: 0.02, "background below the diagram's mirror point")
     }
 
-    /// K-07: caches of 96 layouts and 192 rasters (≤ 192 MB); pinch zoom clamped to [0.5, 4]; zoomed container ≤ 540 pt.
+    /// K-07, R-09, T-21: caches of 96 layouts and 192 rasters (≤ 192 MB); pinch zoom clamped to [0.5, 4]; zoomed container
+    /// ≤ 540 pt; the five styles persist under `mdv6.mermaid.style`; a PNG export is the natural size at 2× pixel density.
     func testConstants() {
         XCTAssertEqual(MermaidCaches.layoutLimit, 96); XCTAssertEqual(MermaidCaches.rasterLimit, 192)
         XCTAssertEqual(MermaidCaches.rasterByteLimit, 192 * 1024 * 1024)
@@ -159,6 +161,11 @@ final class MermaidTests: XCTestCase {
         XCTAssertEqual(MermaidZoom.clamp(9), 4); XCTAssertEqual(MermaidZoom.clamp(0.1), 0.5)
         XCTAssertEqual(MermaidStyle.allCases.map(\.rawValue), ["document", "light", "dark", "tokyoNight", "catppuccin"])
         XCTAssertEqual(MermaidStyle(storedValue: "neon"), .document)
+        XCTAssertEqual(Preferences.Key.mermaidStyle, "mdv6.mermaid.style")
+        let p = try! prepare("flowchart LR\n  A --> B")
+        let export = MDVMermaidPipeline.rasterize(p, width: p.naturalSize.width, scale: 2)!
+        let rep = export.representations.first as! NSBitmapImageRep
+        XCTAssertEqual(CGFloat(rep.pixelsWide), floor(p.naturalSize.width) * 2); XCTAssertEqual(CGFloat(rep.pixelsHigh), floor(p.naturalSize.height) * 2)
     }
 
     /// C-06.3: the Document style derives its theme from the active `MDVTheme` — background = code-block background,

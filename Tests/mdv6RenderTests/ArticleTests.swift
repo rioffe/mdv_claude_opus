@@ -4,6 +4,7 @@ import AppKit
 
 /// The article's pure rules: R-24/E-17 find rendering, R-08 fence parts and copy-without-prompts, §7.2 width plumbing
 /// (T-18), the R-16 placeholders and the E-16/C-07.1 placement flag.
+@MainActor
 final class ArticleTests: XCTestCase {
 
     /// R-24, E-17, T-23: occurrences are counted on source; `**` on `**bold**` counts 2 and marks nothing; three "the" in

@@ -44,7 +44,7 @@ final class MathRenderTests: XCTestCase {
         XCTAssertGreaterThan(boxed.size.width, bare.size.width + 0.6 * 16)
     }
 
-    /// R-14, E-10: LaTeX SwiftMath rejects renders as its source with the parser's message; nothing is blank. T-07.
+    /// R-14, E-10, R-36, I-002, C-14: LaTeX SwiftMath rejects renders as its source (in place, never modally) with the parser's message; nothing is blank. T-07.
     func testRejectedLatexFallsBackWithMessage() {
         guard case .fallback(let source, let message) = MathImageCache.shared.rendered(for: spec("\\unknowncmd{x}", display: true), scale: 2) else {
             return XCTFail("expected fallback")

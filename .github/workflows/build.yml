@@ -15,10 +15,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Swift version
         run: swift --version
-      - name: Test
-        run: swift test --parallel --xunit-output junit.xml
       - name: Build debug
         run: ./build.sh debug
+      - name: Test (the §9.1 tests read build/mdv6.app)
+        run: swift test --parallel --xunit-output junit.xml
       - name: Build release
         run: ./build.sh release
       - name: Verify bundle layout (C-13)

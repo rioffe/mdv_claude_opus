@@ -1,6 +1,7 @@
-// AppModel — the injected store (§9.0 `AppModel.bootstrap`), the §10 isolation variables, and the services.
-// `startup/register` (R-40, E-26) are added by W5.
+// AppModel — the injected store (§9.0 `AppModel.bootstrap`), the §10 isolation variables, the services, the R-40
+// startup and the E-26 window↔session registry (only the key window's session acts on commands and open events).
 import Foundation
+import AppKit
 
 public final class AppModel {
     public let supportDirectory: URL
@@ -39,6 +40,52 @@ public final class AppModel {
         try? FileManager.default.createDirectory(at: store.supportDir, withIntermediateDirectories: true)
         let defaults = store.defaultsSuite.flatMap { UserDefaults(suiteName: $0) } ?? UserDefaults.standard
         return AppModel(supportDirectory: store.supportDir, defaultsSuite: store.defaultsSuite, defaults: defaults, fileSystem: fileSystem)
+    }
+
+    // MARK: sessions and windows (E-26, R-40)
+
+    private var sessions: [(window: NSWindow, session: DocumentSession)] = []
+    private var mainSession: DocumentSession?
+    /// Test hook: what counts as the key window (`NSApp.keyWindow` in the app).
+    public var keyWindowProvider: () -> NSWindow? = { NSApp?.keyWindow }
+
+    @MainActor
+    public func register(session: DocumentSession, window: NSWindow) {
+        sessions.removeAll { $0.window === window }
+        sessions.append((window, session))
+        if mainSession == nil { mainSession = session }
+    }
+
+    @MainActor
+    public func unregister(window: NSWindow) {
+        sessions.removeAll { $0.window === window }
+        if let m = mainSession, !sessions.contains(where: { $0.session === m }) { mainSession = sessions.first?.session }
+    }
+
+    @MainActor
+    public func session(for window: NSWindow?) -> DocumentSession? {
+        guard let window else { return nil }
+        return sessions.first { $0.window === window }?.session
+    }
+
+    /// E-26: the key window's session; with no key window yet (cold start), the first registered session.
+    @MainActor
+    public var keySession: DocumentSession? { session(for: keyWindowProvider()) ?? mainSession ?? sessions.first?.session }
+
+    /// R-01 / E-26: an open event (Finder, `open -a`, `bin/mdv6 FILE`) goes to the key window only.
+    @MainActor
+    public func handleOpenEvent(urls: [URL]) {
+        keySession?.open(urls: urls)
+    }
+
+    /// R-40: the main window's launch — a cold-start argument pre-empts restoring the history head.
+    @MainActor
+    @discardableResult
+    public func startup(arguments: [URL], session: DocumentSession) -> DocumentSession {
+        mainSession = session
+        if arguments.isEmpty { session.restoreOnLaunch() } else { session.coldStart(arguments) }
+        history.reindexOnLaunch()
+        return session
     }
 
     init(supportDirectory: URL, defaultsSuite: String?, defaults: UserDefaults, fileSystem: FileSystem) {

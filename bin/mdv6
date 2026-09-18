@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# mdv6 — open Markdown files in the mdv6 application (R-33, §5.2).
-#
 # usage: mdv6 [FILE... | DIR | -]
 #        mdv6 --version | -h | --help
 #   FILE...   open each file (absolute or relative) in the running application; the last is displayed
@@ -8,6 +6,7 @@
 #   -         read Markdown from stdin into a temporary .md file and open it (sole argument only)
 #   MDV6_APP  overrides the bundle location (a directory); otherwise /Applications, ~/Applications,
 #             the checkout's build/, then Spotlight are searched
+#   exit 1    "mdv6: no such file: <arg>" for a missing argument, or the bundle not found (R-33, §5.2)
 set -u
 
 find_app() {
