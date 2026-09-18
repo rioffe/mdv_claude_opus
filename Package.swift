@@ -27,7 +27,10 @@ let package = Package(
                 "yaml/src/schema.core.c",   // #included by yaml/src/scanner.c
             ],
             publicHeadersPath: "include",
-            cSettings: [.define("YAML_SCHEMA", to: "core")]
+            cSettings: [
+                .define("YAML_SCHEMA", to: "core"),
+                .unsafeFlags(["-Wno-shorten-64-to-32"]),   // upstream tree-sitter scanners (pinned, unpatched) narrow size_t
+            ]
         ),
         // The application: every contract, pipeline, service, session rule and view (§9.0).
         .target(

@@ -95,13 +95,13 @@ final class CodeRendererTests: XCTestCase {
         for run in a.runs {
             let font = run[CodeRenderer.FontKey.self]!
             XCTAssertEqual(font.pointSize, 0.85 * 17 * 1.5, accuracy: 0.01)
-            XCTAssertTrue(font.fontDescriptor.symbolicTraits.contains(.monoSpace))
+            XCTAssertTrue(font.isMonospace)
         }
         let s = String(a.characters)
         let idx = AttributedString.Index(s.range(of: "# note")!.lowerBound, within: a)!
-        XCTAssertTrue(a.runs[idx][CodeRenderer.FontKey.self]!.fontDescriptor.symbolicTraits.contains(.italic))
+        XCTAssertTrue(a.runs[idx][CodeRenderer.FontKey.self]!.isItalic)
         let x = AttributedString.Index(s.startIndex, within: a)!
-        XCTAssertFalse(a.runs[x][CodeRenderer.FontKey.self]!.fontDescriptor.symbolicTraits.contains(.italic))
+        XCTAssertFalse(a.runs[x][CodeRenderer.FontKey.self]!.isItalic)
     }
 
     /// C-05: the result cache is keyed by (language, theme id, zoom, hash(code)), holds at most 256 entries and is flushed whole when full.

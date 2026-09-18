@@ -90,7 +90,9 @@ public struct MDVMermaidDiagramView: View {
         let width = rasterWidth, scale = backingScale
         let key = MermaidCaches.RasterKey(source: source, themeId: themeKey, width: width, zoom: committedZoom, scale: scale)
         if let cached = MermaidCaches.shared.raster(key) { image = cached; return }
-        let rendered = await Task.detached(priority: .userInitiated) { MDVMermaidPipeline.rasterize(p, width: width, scale: scale) }.value
+        // `NSImage` is not `Sendable` before macOS 14; the raster is created and consumed on different actors by design (K-07)
+        struct Raster: @unchecked Sendable { let image: NSImage? }
+        let rendered = await Task.detached(priority: .userInitiated) { Raster(image: MDVMermaidPipeline.rasterize(p, width: width, scale: scale)) }.value.image
         if Task.isCancelled { return }
         if let rendered { MermaidCaches.shared.store(rendered, for: key) }
         image = rendered

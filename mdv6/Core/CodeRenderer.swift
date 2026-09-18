@@ -16,7 +16,18 @@ public final class CodeRenderer {
     /// The capture colour applied to a run (`RRGGBBAA`), for tests and the harness.
     public enum CaptureColorKey: AttributedStringKey { public typealias Value = String; public static let name = "mdv6.captureColor" }
     /// The resolved `NSFont` of a run.
-    public enum FontKey: AttributedStringKey { public typealias Value = NSFont; public static let name = "mdv6.font" }
+    /// The fence font as a value (`NSFont` is not `Sendable`, and attribute values must be): point size and traits.
+    public struct FontSpec: Hashable, Sendable {
+        public let pointSize: CGFloat
+        public let isMonospace: Bool
+        public let isItalic: Bool
+        public init(_ font: NSFont) {
+            pointSize = font.pointSize
+            isMonospace = font.fontDescriptor.symbolicTraits.contains(.monoSpace)
+            isItalic = font.fontDescriptor.symbolicTraits.contains(.italic)
+        }
+    }
+    public enum FontKey: AttributedStringKey { public typealias Value = FontSpec; public static let name = "mdv6.font" }
 
     struct Grammar { let language: Language; let query: Query? }
 
@@ -80,7 +91,7 @@ public final class CodeRenderer {
         var out = AttributedString(code)
         out.font = Font(baseFont)
         out.foregroundColor = palette.plain.color
-        out[FontKey.self] = baseFont
+        out[FontKey.self] = FontSpec(baseFont)
         out[CaptureColorKey.self] = palette.plain.hex
 
         if let lang, let g = grammar(for: lang), let query = g.query, !plainForSession.contains(lang) {
@@ -91,7 +102,7 @@ public final class CodeRenderer {
                     let cursor = query.execute(in: tree)
                     let context = Predicate.Context(string: code)
                     var assigned = Set<NSRange>()                              // first capture of a node wins (tree-sitter convention)
-                    while let match = cursor.nextMatch() {
+                    while let match = cursor.next() {
                         guard match.allowed(in: context) else { continue }        // #eq? / #match? / #any-of? predicates
                         for capture in match.captures {
                             guard let name = capture.name, palette.knows(capture: name),   // `@spell`-style captures carry no colour
@@ -104,7 +115,7 @@ public final class CodeRenderer {
                             out[lo..<hi][CaptureColorKey.self] = color.hex
                             if palette.isItalic(capture: name) {
                                 out[lo..<hi].font = Font(italicFont)
-                                out[lo..<hi][FontKey.self] = italicFont
+                                out[lo..<hi][FontKey.self] = FontSpec(italicFont)
                             }
                         }
                     }

@@ -14,8 +14,9 @@ public enum CommandCenter {
     public static let name = Notification.Name("mdv6.command")
     /// E-26: the target window is captured when the command is posted.
     @MainActor
-    public static func post(_ command: AppCommand, window: NSWindow? = NSApp.keyWindow) {
-        NotificationCenter.default.post(name: name, object: nil, userInfo: ["command": command.rawValue, "window": window as Any])
+    public static func post(_ command: AppCommand, window: NSWindow? = nil) {
+        let target = window ?? NSApp.keyWindow
+        NotificationCenter.default.post(name: name, object: nil, userInfo: ["command": command.rawValue, "window": target as Any])
     }
 }
 
