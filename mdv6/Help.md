@@ -25,7 +25,7 @@ mdv6 reads Markdown the way a good document viewer reads a PDF: typographically 
 
 ## Bookmarks
 
-- **⌘D** bookmarks the paragraph under the pointer (or the topmost visible one), titled by the nearest heading. The first five bookmarks answer to ⌘1…⌘5.
+- **⌘D** bookmarks the paragraph under the pointer (or the topmost visible one), titled by the nearest heading; the new row is shown in the inspector's Bookmarks pane and marked current. The first five bookmarks answer to ⌘1…⌘5.
 - Right-click a bookmark for **Go to Bookmark**, **Reveal in Finder**, the four **Move** items and **Remove Bookmark**; drag rows to reorder. A bookmark whose file has moved is marked and beeps when opened.
 - **⌘⇧0** sets a temporary placeholder at the current spot (shown first in the bookmarks pane with a `⌘0` badge); **⌘0** returns to it, even from another file. Right-click it for **Clear Placeholder**. Placeholders do not survive a relaunch.
 

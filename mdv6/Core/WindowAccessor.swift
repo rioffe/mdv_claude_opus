@@ -44,8 +44,8 @@ public struct WindowAccessor: NSViewRepresentable {
     }
 
     public func updateNSView(_ nsView: NSView, context: Context) {
-        // C-18.1: the window takes the theme's colour scheme (the application-wide appearance is not changed, R-29)
-        if let window = nsView.window { WindowAccessor.applyAppearance(window, isDark: isDark) }
+        // C-18.1: the window's appearance is owned by `.preferredColorScheme` on the root view (F-006); an assignment here
+        // raced it — `applyAppearance` stays for the F-003 contract and is no longer called from the update path.
     }
 
     public func makeCoordinator() -> Coordinator { Coordinator() }

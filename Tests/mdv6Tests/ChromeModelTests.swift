@@ -183,5 +183,18 @@ final class ChromeModelTests: XCTestCase {
         XCTAssertTrue(relaunched.keySession === only, "exactly one session after launch")
     }
 
+    /// R-29, C-18.1: *System* follows the application's effective appearance (`SystemAppearance`), not the window's colour
+    /// scheme — every window takes its theme's scheme through `.preferredColorScheme` (F-006), so the SwiftUI environment
+    /// inside a window cannot be the source of the macOS appearance.
+    func testSystemAppearanceReadsTheApplicationNotTheWindow() {
+        XCTAssertTrue(SystemAppearance.isDark(NSAppearance(named: .darkAqua)))
+        XCTAssertFalse(SystemAppearance.isDark(NSAppearance(named: .aqua)))
+        XCTAssertFalse(SystemAppearance.isDark(nil))
+        XCTAssertEqual(ChromeRules.colorScheme(for: .twilight), .dark)
+        XCTAssertEqual(ChromeRules.colorScheme(for: .sevilla), .light)
+        let sys = SystemAppearance(application: NSApplication.shared)
+        XCTAssertEqual(sys.isDark, SystemAppearance.isDark(NSApplication.shared.effectiveAppearance))
+    }
+
     final class NoWatch: FileWatching { func cancel() {} }
 }

@@ -162,9 +162,11 @@ public struct HistorySidebar: View {
         return ScrollView {
             LazyVStack(spacing: 2) {
                 ForEach(results, id: \.path) { hit in
-                    SearchHitRow(hit: hit, theme: theme, isCurrent: hit.path == session.currentPath, isHovered: hoveredHit == hit.path)
-                        .onHover { hoveredHit = $0 ? hit.path : (hoveredHit == hit.path ? nil : hoveredHit) }
-                        .onTapGesture { session.openHit(path: hit.path) }
+                    Button { session.openHit(path: hit.path) } label: {
+                        SearchHitRow(hit: hit, theme: theme, isCurrent: hit.path == session.currentPath, isHovered: hoveredHit == hit.path)
+                    }
+                    .buttonStyle(.plain)                                                   // F-007: a Button takes the activating click
+                    .onHover { hoveredHit = $0 ? hit.path : (hoveredHit == hit.path ? nil : hoveredHit) }
                 }
                 if results.isEmpty {
                     Text("No results").font(.system(size: ChromeMetrics.searchFieldFontSize)).foregroundStyle(theme.secondaryText).padding(.top, 12)
@@ -253,6 +255,7 @@ public struct InspectorView: View {
     @State private var hoveredTOC: Int? = nil
     @State private var hoveredBookmark: Int64? = nil
     @State private var hoveredPlaceholder = false
+    @State private var draggedBookmark: Int64? = nil
     @State private var dragStartHeight: CGFloat? = nil
 
     public init(session: DocumentSession, bookmarks: BookmarksManager, placeholderStore: PlaceholderStore, preferences: Preferences, theme: MDVTheme) {
@@ -284,9 +287,11 @@ public struct InspectorView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 1) {
                     ForEach(filteredHeadings, id: \.blockIndex) { h in
-                        TOCRow(heading: h, theme: theme, selected: session.tocSelectedBlock == h.blockIndex, hovered: hoveredTOC == h.blockIndex)
-                            .onHover { hoveredTOC = $0 ? h.blockIndex : (hoveredTOC == h.blockIndex ? nil : hoveredTOC) }
-                            .onTapGesture { session.selectTOC(blockIndex: h.blockIndex) }
+                        Button { session.selectTOC(blockIndex: h.blockIndex) } label: {
+                            TOCRow(heading: h, theme: theme, selected: session.tocSelectedBlock == h.blockIndex, hovered: hoveredTOC == h.blockIndex)
+                        }
+                        .buttonStyle(.plain)                                               // F-007
+                        .onHover { hoveredTOC = $0 ? h.blockIndex : (hoveredTOC == h.blockIndex ? nil : hoveredTOC) }
                     }
                 }
                 .padding(.horizontal, 8)
@@ -347,35 +352,40 @@ public struct InspectorView: View {
 
     private var bookmarksPane: some View {
         ScrollViewReader { proxy in
-        List {
-            if let p = placeholderStore.placeholder {
-                PlaceholderRow(placeholder: p, theme: theme, current: session.placeholderIsCurrent, hovered: hoveredPlaceholder,
-                               missing: !FileManager.default.fileExists(atPath: p.path))
+        ScrollView {
+            LazyVStack(spacing: 2) {
+                if let p = placeholderStore.placeholder {
+                    Button { session.jumpToPlaceholder() } label: {
+                        PlaceholderRow(placeholder: p, theme: theme, current: session.placeholderIsCurrent, hovered: hoveredPlaceholder,
+                                       missing: !FileManager.default.fileExists(atPath: p.path))
+                    }
+                    .buttonStyle(.plain)                                                   // F-007
                     .onHover { hoveredPlaceholder = $0 }
-                    .onTapGesture { session.jumpToPlaceholder() }
                     .contextMenu { ForEach(ChromeRules.placeholderMenu, id: \.self) { item in Button(item) { session.clearPlaceholder() } } }
-                    .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 0, trailing: 8))
-                    .listRowSeparator(.hidden)
                     .id("placeholder")
-                Rectangle().fill(theme.border).frame(height: ChromeMetrics.dividerWidth)
-                    .padding(.horizontal, ChromeMetrics.placeholderDividerInset.horizontal)
-                    .padding(.vertical, ChromeMetrics.placeholderDividerInset.vertical)
-                    .listRowInsets(EdgeInsets()).listRowSeparator(.hidden)
-            }
-            ForEach(Array(bookmarks.bookmarks.enumerated()), id: \.element.id) { index, row in
-                let missing = bookmarks.isMissing(row)
-                BookmarkRowView(row: row, slot: index < BookmarksManager.slotCount ? index + 1 : nil, theme: theme,
-                                current: session.currentBookmarkID == row.id, hovered: hoveredBookmark == row.id, missing: missing)
+                    Rectangle().fill(theme.border).frame(height: ChromeMetrics.dividerWidth)
+                        .padding(.horizontal, ChromeMetrics.placeholderDividerInset.horizontal)
+                        .padding(.vertical, ChromeMetrics.placeholderDividerInset.vertical)
+                }
+                ForEach(Array(bookmarks.bookmarks.enumerated()), id: \.element.id) { index, row in
+                    let missing = bookmarks.isMissing(row)
+                    Button { session.openBookmark(row) } label: {
+                        BookmarkRowView(row: row, slot: index < BookmarksManager.slotCount ? index + 1 : nil, theme: theme,
+                                        current: session.currentBookmarkID == row.id, hovered: hoveredBookmark == row.id, missing: missing,
+                                        dropTarget: draggedBookmark != nil && draggedBookmark != row.id && hoveredBookmark == row.id)
+                            // R-27: reorderable by drag — the dragged row moves to the row it enters (F-009: `List.onMove`
+                            // never started a drag session for these rows)
+                            .onDrag { draggedBookmark = row.id; return NSItemProvider(object: String(row.id) as NSString) }
+                    }
+                    .buttonStyle(.plain)                                                   // F-007
                     .onHover { hoveredBookmark = $0 ? row.id : (hoveredBookmark == row.id ? nil : hoveredBookmark) }
-                    .onTapGesture { session.openBookmark(row) }
                     .contextMenu { bookmarkMenu(row: row, index: index, missing: missing) }
-                    .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
-                    .listRowSeparator(.hidden)
+                    .onDrop(of: [.text], delegate: BookmarkDropDelegate(target: row, bookmarks: bookmarks, dragged: $draggedBookmark))
+                }
             }
-            .onMove { from, to in bookmarks.move(fromOffsets: from, toOffset: to) }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
         .onChange(of: placeholderStore.placeholder) { p in if p != nil { proxy.scrollTo("placeholder", anchor: .top) } }   // R-28: the row is shown when set
         }
     }
@@ -446,9 +456,10 @@ struct BookmarkRowView: View {
     let current: Bool
     let hovered: Bool
     let missing: Bool
+    var dropTarget = false
 
     var body: some View {
-        let style = ChromeRules.rowStyle(current: current, hovered: hovered, missing: missing, dropTarget: false, placeholder: false, theme: theme)
+        let style = ChromeRules.rowStyle(current: current, hovered: hovered, missing: missing, dropTarget: dropTarget, placeholder: false, theme: theme)
         HStack(spacing: 6) {
             Image(systemName: missing ? "exclamationmark.triangle.fill" : "bookmark.fill")
                 .font(.system(size: ChromeMetrics.bookmarkGlyphSize))
@@ -501,4 +512,21 @@ struct PlaceholderRow: View {
         .opacity(style.opacity)
         .contentShape(Rectangle())
     }
+}
+
+/// R-27 / C-18.9: drag-to-reorder for bookmark rows — entering a row moves the dragged row there (persisted at once).
+struct BookmarkDropDelegate: DropDelegate {
+    let target: Database.BookmarkRow
+    let bookmarks: BookmarksManager
+    @Binding var dragged: Int64?
+
+    func dropEntered(info: DropInfo) {
+        guard let dragged, dragged != target.id,
+              let from = bookmarks.bookmarks.firstIndex(where: { $0.id == dragged }),
+              let to = bookmarks.bookmarks.firstIndex(where: { $0.id == target.id }) else { return }
+        bookmarks.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
+    }
+    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
+    func performDrop(info: DropInfo) -> Bool { dragged = nil; return true }
+    func dropExited(info: DropInfo) {}
 }

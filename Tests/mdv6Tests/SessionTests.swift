@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 import AppKit
 @testable import mdv6Core
 
@@ -255,8 +256,15 @@ final class SessionTests: XCTestCase {
         XCTAssertEqual(s.currentEntry?.path, "/d/a.md"); XCTAssertEqual(s.scrollTarget?.block, 3); XCTAssertEqual(s.tocSelectedBlock, 3)
         s.handleLink(URL(string: "c.md#nope")!)
         XCTAssertEqual(s.currentEntry?.path, "/d/c.md"); XCTAssertEqual(s.scrollTarget?.block, 0)
-        // system opener: https, missing local, other extension, file: to txt, custom scheme
-        for l in ["https://example.com", "does-not-exist.md", "notes.txt", "file:///d/notes.txt", "x-custom://thing"] { s.handleLink(URL(string: l)!) }
+        // E-05: a local Markdown path that does not exist is handed to the system opener and nothing navigates
+        let historyBefore = model.history.entries.map(\.path), backBefore = s.backCount
+        s.handleLink(URL(string: "does-not-exist.md")!)
+        XCTAssertEqual(opened.last?.path, "/d/does-not-exist.md", "E-05: handed to the opener, resolved against the document")
+        XCTAssertEqual(s.currentEntry?.path, "/d/c.md", "E-05: no navigation")
+        XCTAssertEqual(model.history.entries.map(\.path), historyBefore, "E-05: no history row")
+        XCTAssertEqual(s.backCount, backBefore, "E-05: no back-snapshot")
+        // system opener: https, other extension, file: to txt, custom scheme
+        for l in ["https://example.com", "notes.txt", "file:///d/notes.txt", "x-custom://thing"] { s.handleLink(URL(string: l)!) }
         XCTAssertEqual(opened.count, 5)
         XCTAssertEqual(s.currentEntry?.path, "/d/c.md")
     }
@@ -340,14 +348,19 @@ final class SessionTests: XCTestCase {
 
     // MARK: R-27 / R-28 (T-26, T-27)
 
-    /// R-27: ⌘D anchors at the hovered block, else the topmost visible; titles by the R-27 rule; slots; E-09 beeps.
+    /// R-27: ⌘D anchors at the hovered block, else the topmost visible; titles by the R-27 rule; slots; E-09 beeps. The new row
+    /// is revealed — inspector shown, pane expanded — and marked current (F-008).
     func testBookmarkCurrentSpot() {
         let s = session()
         s.open(urls: [u("/d/a.md")])
         s.topVisibleBlock = 1
         s.hoveredBlockIndex = 4
+        model.preferences.inspectorVisible = false; model.preferences.bookmarksExpanded = false
+        s.setPlaceholder(); XCTAssertTrue(s.placeholderIsCurrent)
         s.bookmarkCurrentSpot()
         XCTAssertEqual(model.bookmarks.bookmarks.last?.blockIndex, 4); XCTAssertEqual(model.bookmarks.bookmarks.last?.title, "Second heading")
+        XCTAssertTrue(model.preferences.inspectorVisible); XCTAssertTrue(model.preferences.bookmarksExpanded)
+        XCTAssertEqual(s.currentBookmarkID, model.bookmarks.bookmarks.last?.id); XCTAssertFalse(s.placeholderIsCurrent)
         s.hoveredBlockIndex = nil
         s.bookmarkCurrentSpot()
         XCTAssertEqual(model.bookmarks.bookmarks.last?.blockIndex, 1); XCTAssertEqual(model.bookmarks.bookmarks.last?.title, "A")
@@ -450,7 +463,8 @@ final class SessionTests: XCTestCase {
         let e = expectation(description: "burst")
         e.assertForOverFulfill = false
         let w = FileWatcher(path: file, onChange: { events += 1; e.fulfill() })
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.3))
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.6))                    // let the setup write's event (if FSEvents replays it) land
+        events = 0
         let burstStart = Date()
         for i in 0..<5 { try "write \(i)".write(to: file, atomically: false, encoding: .utf8); usleep(1_000) }
         let burst = Date().timeIntervalSince(burstStart)
@@ -483,6 +497,22 @@ final class SessionTests: XCTestCase {
         XCTAssertEqual(s.renderGeneration, g0 + 3)
         XCTAssertFalse(s.open(u("/d/missing.md"), route: .adding))
         XCTAssertEqual(s.renderGeneration, g0 + 3, "an aborted load changes nothing")
+    }
+
+    /// R-29, R-30, R-17: a theme, zoom or typography change republishes through the session, because the article's blocks
+    /// observe the session (`ArticleHost`) and derive `theme`/`zoom` from the preferences (F-005: without this a block only
+    /// re-rendered on hover, so switching themes recoloured the text one block at a time as the pointer crossed it).
+    func testPreferenceChangesRepublishThroughSession() {
+        let s = session()
+        var published = 0
+        let c = s.objectWillChange.sink { published += 1 }
+        defer { c.cancel() }
+        model.preferences.themeId = "twilight"
+        XCTAssertEqual(published, 1)
+        XCTAssertEqual(s.theme.id, "twilight")
+        model.preferences.fontScale = 1.2
+        model.preferences.smartTypography = false
+        XCTAssertEqual(published, 3)
     }
 
     /// E-20, T-35: the same path open in two windows — each window's watcher reloads independently.
@@ -534,6 +564,50 @@ final class SessionTests: XCTestCase {
         XCTAssertNil(model.session(for: wb))
         model.keyWindowProvider = { nil }
         XCTAssertTrue(model.keySession === a, "with no key window the first registered session acts (cold start)")
+    }
+
+    /// T-40, E-26, R-01, R-18: two windows on different files, window 2 key — an open event loads into window 2 only; ⌘D
+    /// (`bookmarkCurrentSpot` on the key session) adds exactly one bookmark, window 2's; ⌘← moves window 2 only; ⌘F opens
+    /// window 2's find bar only.
+    func testCommandsReachTheKeyWindowOnly() {
+        let a = session(), b = session()
+        let wa = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+        let wb = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+        model.register(session: a, window: wa); model.register(session: b, window: wb)
+        a.open(urls: [u("/d/a.md")]); b.open(urls: [u("/d/b.md")])
+        model.keyWindowProvider = { wb }
+        model.handleOpenEvent(urls: [u("/d/c.md")])                                 // open -a … c.md
+        XCTAssertEqual(a.currentEntry?.path, "/d/a.md"); XCTAssertEqual(b.currentEntry?.path, "/d/c.md")
+        let before = model.bookmarks.bookmarks.count
+        model.keySession?.bookmarkCurrentSpot()                                       // ⌘D
+        XCTAssertEqual(model.bookmarks.bookmarks.count, before + 1)
+        XCTAssertEqual(model.bookmarks.bookmarks.last?.path, "/d/c.md", "window 2's bookmark")
+        XCTAssertNotNil(b.currentBookmarkID); XCTAssertNil(a.currentBookmarkID)
+        model.keySession?.goBack()                                                    // ⌘←
+        XCTAssertEqual(b.currentEntry?.path, "/d/b.md"); XCTAssertEqual(a.currentEntry?.path, "/d/a.md")
+        model.keySession?.openFind()                                                  // ⌘F
+        XCTAssertNotNil(b.findState); XCTAssertNil(a.findState)
+    }
+
+    /// R-21: the inspector's table of contents is the document's single-line ATX `#`–`###` headings (C-02) with math shown
+    /// as Unicode, its rows jump to their block, its filter narrows rows, and its visibility and width persist (C-04).
+    func testInspectorContents() {
+        fs.contents["/d/toc.md"] = "# Top $\\alpha$\n\n## Two\n\n### Three\n\n#### Four\n\nSetext\n======\n\ntext"
+        let s = session()
+        s.open(urls: [u("/d/toc.md")])
+        let toc = s.document!.tocHeadings
+        XCTAssertEqual(toc.map(\.level), [1, 2, 3], "h4 and setext headings are not TOC rows")
+        XCTAssertEqual(toc.map(\.text), ["Top α", "Two", "Three"], "math as Unicode, not LaTeX source")
+        s.selectTOC(blockIndex: toc[2].blockIndex)
+        XCTAssertEqual(s.scrollTarget?.block, toc[2].blockIndex, "a row jumps to its block")
+        XCTAssertEqual(s.tocSelectedBlock, toc[2].blockIndex)
+        XCTAssertEqual(toc.filter { $0.text.localizedCaseInsensitiveContains("tw") }.map(\.text), ["Two"], "the filter rule the pane applies")
+        model.preferences.inspectorVisible = true
+        model.preferences.inspectorWidth = 300
+        let relaunched = AppModel.bootstrap(supportDir: dir, defaultsSuite: suite, fileSystem: fs)
+        XCTAssertTrue(relaunched.preferences.inspectorVisible); XCTAssertEqual(relaunched.preferences.inspectorWidth, 300)
+        model.preferences.inspectorWidth = 900
+        XCTAssertEqual(AppModel.bootstrap(supportDir: dir, defaultsSuite: suite, fileSystem: fs).preferences.inspectorWidth, 520, "clamped to K-04")
     }
 
     /// R-31, T-38: ⌘? copies the bundled Help.md over the support-directory copy every time and opens it as an adding route.

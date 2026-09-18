@@ -330,3 +330,25 @@ public enum FontRegistration {
         return "OpenDyslexic"
     }()
 }
+
+
+/// R-29: the macOS appearance as the *application* sees it. Windows override their own appearance per C-18.1
+/// (`.preferredColorScheme`), so the SwiftUI `colorScheme` environment inside a window is the theme's, not the
+/// system's; the system's is `NSApp.effectiveAppearance`, observed here so *System* switches live.
+public final class SystemAppearance: ObservableObject {
+    public static let shared = SystemAppearance()
+    @Published public private(set) var isDark: Bool
+    private var observation: NSKeyValueObservation?
+
+    public init(application: NSApplication? = NSApp) {
+        isDark = SystemAppearance.isDark(application?.effectiveAppearance)
+        observation = application?.observe(\.effectiveAppearance, options: [.new]) { [weak self] app, _ in
+            let dark = SystemAppearance.isDark(app.effectiveAppearance)
+            DispatchQueue.main.async { if self?.isDark != dark { self?.isDark = dark } }
+        }
+    }
+
+    public static func isDark(_ appearance: NSAppearance?) -> Bool {
+        appearance?.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+    }
+}

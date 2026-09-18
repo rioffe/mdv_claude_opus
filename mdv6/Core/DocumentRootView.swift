@@ -25,7 +25,7 @@ public struct DocumentRootView: View {
     @ObservedObject var history: HistoryManager
     @ObservedObject var bookmarks: BookmarksManager
     @ObservedObject var placeholderStore: PlaceholderStore
-    @Environment(\.colorScheme) private var systemScheme
+    @ObservedObject private var systemAppearance = SystemAppearance.shared
     @Environment(\.openWindow) private var openWindow
 
     @State private var window: NSWindow? = nil
@@ -72,6 +72,7 @@ public struct DocumentRootView: View {
         }
         .background(theme.background)
         .background(WindowAccessor(session: session, isDark: theme.isDark, window: $window))
+        .preferredColorScheme(ChromeRules.colorScheme(for: theme))                              // C-18.1: the whole window, title bar included (F-006)
         .navigationTitle(session.windowTitle)                                                    // C-18.1
         .toolbarBackground(theme.background, for: .windowToolbar)
         .toolbarBackground(.visible, for: .windowToolbar)
@@ -82,8 +83,7 @@ public struct DocumentRootView: View {
             guard let path = note.userInfo?["path"] as? String, let target = note.userInfo?["window"] as? NSWindow, target === window else { return }
             openWindow(id: "document", value: URL(fileURLWithPath: path))
         }
-        .onChange(of: systemScheme) { s in session.isDarkAppearance = (s == .dark) }                     // R-29 live switch
-        .onAppear { session.isDarkAppearance = (systemScheme == .dark) }
+        .onReceive(systemAppearance.$isDark) { session.isDarkAppearance = $0 }                           // R-29 live switch
         .onChange(of: preferences.fontScale) { s in showHUD(ZoomStep.hudPercent(s)) }
         .onChange(of: preferences.loadRemoteImages) { on in if !on { session.remoteLoader?.cancelAll() } }
         .alert("Couldn't open in external editor", isPresented: Binding(get: { editorAlert != nil }, set: { if !$0 { editorAlert = nil } })) {
@@ -210,23 +210,23 @@ public struct DocumentRootView: View {
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
-            Button { CommandCenter.post(.openFile, window: window) } label: { Image(systemName: "plus") }.help("Open… (⌘O)")
-            Button { CommandCenter.post(.editCurrentFile, window: window) } label: { Image(systemName: "pencil") }.help("Edit in External Editor (⌘E)")
+            Button { CommandCenter.post(.openFile, window: window) } label: { Image(systemName: "plus").foregroundStyle(theme.secondaryText) }.help("Open… (⌘O)")
+            Button { CommandCenter.post(.editCurrentFile, window: window) } label: { Image(systemName: "pencil").foregroundStyle(theme.secondaryText) }.help("Edit in External Editor (⌘E)")
             Menu {
                 ForEach(MDVTheme.all) { t in
                     Button { preferences.themeId = t.id } label: { preferences.themeId == t.id ? Label(t.name, systemImage: "checkmark") : Label(t.name, systemImage: "") }
                 }
                 Divider()
                 Button { preferences.themeId = ThemeCatalog.systemId } label: { preferences.themeId == ThemeCatalog.systemId ? Label("System", systemImage: "checkmark") : Label("System", systemImage: "") }
-            } label: { Image(systemName: "paintpalette") }
+            } label: { Image(systemName: "paintpalette").foregroundStyle(theme.secondaryText) }
             .menuIndicator(.hidden).help("Theme")
             Button { CommandCenter.post(.bookmarkCurrentSpot, window: window) } label: {
                 Image(systemName: session.hasBookmarkForCurrentFile ? "bookmark.fill" : "bookmark")
-                    .foregroundStyle(session.hasBookmarkForCurrentFile ? theme.accent : Color.primary)
+                    .foregroundStyle(session.hasBookmarkForCurrentFile ? theme.accent : theme.secondaryText)
             }
             .help("Bookmark Current Spot (⌘D)").disabled(session.document == nil)
             Button { preferences.inspectorVisible.toggle() } label: {
-                Image(systemName: "sidebar.right").foregroundStyle(preferences.inspectorVisible ? theme.accent : Color.primary)
+                Image(systemName: "sidebar.right").foregroundStyle(preferences.inspectorVisible ? theme.accent : theme.secondaryText)
             }
             .help("Toggle Inspector (⌥⌘0)")
         }

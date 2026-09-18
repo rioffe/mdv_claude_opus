@@ -4,6 +4,7 @@
 // (R-19, C-11, E-05, E-06), the TOC selection (E-29), heading copy (R-22), the find model (R-24, E-17, E-18), bookmarks
 // and the placeholder (R-27, R-28, E-09), the editor (R-23) and launch (R-40). Headless: views observe it.
 import Foundation
+import Combine
 import AppKit
 import SwiftUI
 
@@ -87,7 +88,12 @@ public final class DocumentSession: ObservableObject, ArticleHost {
         self.pasteboard = pasteboard
         self.systemOpener = systemOpener
         self.beeper = beeper
+        // F-005: the article's blocks observe the session, not the preferences, and `theme`/`zoom` are derived from the
+        // preferences — so a theme, zoom or typography change must republish through the session or a block only
+        // re-renders when something else (a hover) changes it.
+        preferenceForwarding = model.preferences.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
     }
+    private var preferenceForwarding: AnyCancellable?
 
     // MARK: ArticleHost
 
@@ -368,7 +374,9 @@ public final class DocumentSession: ObservableObject, ArticleHost {
         }
         guard let target = resolved, fileSystem.exists(target), !fileSystem.isDirectory(target),
               DocumentSession.markdownExtensions.contains((target as NSString).pathExtension.lowercased()) else {
-            systemOpener(url); return                                               // E-05: missing / other extension → opener
+            // E-05: missing / other extension → the opener, given the resolved path for a scheme-less destination (a bare
+            // relative URL cannot be opened by anything; the resolved file: URL lets the system report the failure)
+            systemOpener(url.scheme == nil ? resolved.map { URL(fileURLWithPath: $0) } ?? url : url); return
         }
         guard open(URL(fileURLWithPath: target), route: .adding, suppressRestore: fragment != nil) else { systemOpener(url); return }
         if fragment != nil, let doc = document {
@@ -452,7 +460,13 @@ public final class DocumentSession: ObservableObject, ArticleHost {
 
     public func bookmarkCurrentSpot() {
         guard let path = currentPath, let doc = document else { return }
-        model.bookmarks.add(path: path, document: doc, index: anchorBlock ?? 0)
+        guard let row = model.bookmarks.add(path: path, document: doc, index: anchorBlock ?? 0) else { return }
+        // F-008: the new row is shown and marked current (the R-28 placeholder rule, applied to ⌘D): a bookmark added into
+        // a hidden inspector or a collapsed pane was invisible, so ⌘D looked like it did nothing.
+        currentBookmarkID = row.id
+        placeholderIsCurrent = false
+        model.preferences.inspectorVisible = true
+        model.preferences.bookmarksExpanded = true
     }
 
     /// R-27 / E-09: loads the file if needed (no snapshot), scrolls to the resolved anchor, marks the row current; beeps when missing.

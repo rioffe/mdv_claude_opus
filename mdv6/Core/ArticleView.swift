@@ -139,11 +139,11 @@ public struct ArticleBlockView<H: ArticleHost>: View {
                 .environment(\.openURL, OpenURLAction { url in host.linkClicked(url); return .handled })
             if isTOCHeading {
                 // R-22: not text-selectable, pointing hand, a click copies the section (modifier keys not distinguished)
-                markdown
-                    .textSelection(.disabled)
-                    .contentShape(Rectangle())
-                    .onTapGesture { host.copySection(at: index) }
-                    .onHover { inside in if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() } }
+                Button { host.copySection(at: index) } label: {                      // F-007: a Button takes the activating click too
+                    markdown.textSelection(.disabled).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .onHover { inside in if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() } }
             } else {
                 markdown.textSelection(.enabled)
             }

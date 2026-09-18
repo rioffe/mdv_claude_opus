@@ -30,7 +30,7 @@ bin/mdv6 --version                                # 1.0.0
 
 ### The window (§5.1 of the spec)
 
-Three panes: the history sidebar (left; ⌃⌘S; drag its divider 180–400 pt; the chevron on the divider collapses it), the article, and the inspector (right; ⌥⌘0 or the toolbar's right-sidebar button; 180–520 pt, persisted) with **ON THIS PAGE** (the `#`–`###` headings, filter with the magnifier) and **BOOKMARKS** (collapsible header with a count; draggable height). The toolbar is five icon buttons: Open… (⌘O), Edit in external editor (⌘E), the theme pop-up (nine themes + System), Bookmark Current Spot (⌘D; filled when the file has one), Toggle Inspector (⌥⌘0).
+Three panes: the history sidebar (left; ⌃⌘S; drag its divider 180–400 pt; the chevron on the divider collapses it), the article, and the inspector (right; ⌥⌘0 or the toolbar's right-sidebar button; 180–520 pt, persisted) with **ON THIS PAGE** (the `#`–`###` headings, filter with the magnifier) and **BOOKMARKS** (collapsible header with a count; draggable height). The toolbar is five icon buttons: Open… (⌘O), Edit in external editor (⌘E), the theme pop-up (nine themes + System), Bookmark Current Spot (⌘D; filled when the file has one; the new row is revealed in the inspector and marked current), Toggle Inspector (⌥⌘0).
 
 | Menu · item | Shortcut | Notes |
 | --- | --- | --- |
@@ -158,7 +158,7 @@ Vendor/SwiftMath              vendored SwiftMath 1.7.3 (+ patches)
 Tests/mdv6Tests               unit, persistence, session, chrome-rule, build/launcher, diagnostics tests
 Tests/mdv6RenderTests         code/math/Mermaid/image pipelines, rhythm & display math, harness, snapshots
 tools/render-harness          the C-17 executable (one main.swift)
-tools/seed-store, tools/observe.sh, tools/observed-pass.sh, tools/idle-cpu.sh, tools/windowid.swift   observed pass
+tools/seed-store, tools/observe.sh, tools/observed-pass.sh, tools/idle-cpu.sh, tools/windowid.swift, tools/click.swift   observed pass
 tools/speccheck.sh, tools/gate-w0.sh, tools/check-swiftmath.sh, tools/update-goldens.sh, tools/build-icon.sh
 bin/mdv6, build.sh, Makefile, .github/workflows/build.yml
 test-docs/                    corpus, Mermaid diagrams, render-cases.json, goldens
@@ -179,10 +179,13 @@ swift run --package-path tools/render-harness render-harness --check test-docs/r
 bash tools/gate-w0.sh                                 # T-01/T-02/T-03 launcher clauses from the shell
 bash tools/check-swiftmath.sh                         # T-34: the vendored diff against upstream (needs network)
 tools/observed-pass.sh                                # T-44/T-47/T-48 states → build/observed/*.png (isolated store)
+swift tools/click.swift X Y [move|click|right|drag X2 Y2]   # a real pointer event at global screen coordinates (needs Accessibility)
 ```
 
 `tools/speccheck.sh` runs the test suite and both speccheck phases in one go. Notes: `--parallel` is what makes `swift test` write the xUnit file; test files keep `//` out of string literals on lines with braces (speccheck's Swift adapter treats `//` as a comment even inside a literal). The observed pass drives the running app through its own §5.1 command path (`MDV6_SNAPSHOT_DIR` hooks) and writes window snapshots without needing screen-recording permission; the report says what was looked at.
 
 ## Scope
 
-The full specification is implemented. Two rows are *verification pending* on this host, not deferred: T-43 (a Developer ID signing + notarisation run needs credentials and a `vX.Y.Z` tag; the tag gate and the chain are verified) and the hover-only clauses of T-44/T-48 (the divider chevron on hover, Esc hiding the search field) that the driven observed pass cannot exercise without a pointer. See `SPEC_BUILD_REPORT.md`.
+The full specification is implemented. One row is *verification pending* on this host, not deferred: T-43 (a Developer ID signing + notarisation run needs credentials and a `vX.Y.Z` tag; the tag gate and the whole chain — dry-run in a tagged clone — are verified). The §9.6 observed tests (T-44, T-47, T-48) have been driven with real pointer and keyboard input (`tools/click.swift`, `screencapture`) including the hover chevron, Esc hiding the search field, the context menus and drag reorder; the spec asks for a person's look at the result, so `SPEC_BUILD_REPORT.md` lists the snapshots to open.
+
+Two hosts sharing one machine: another build of mdv6 with the same bundle identifier (`com.mdv6.app`) shares `~/Library/Application Support/mdv6` and the `com.mdv6.app` defaults with this one; run one at a time, or give this one an isolated store (`MDV6_SUPPORT_DIR`, `MDV6_DEFAULTS_SUITE`).
