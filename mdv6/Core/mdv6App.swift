@@ -57,6 +57,7 @@ struct Mdv6App: App {
         }
         .windowToolbarStyle(.unified)
         .defaultSize(width: 1280, height: 820)
+        .handlesExternalEvents(matching: [])          // F-010: a LaunchServices open is the delegate's (R-01), never a new window
         .commands { commands }
 
         // ⌘⇧O: a second window with its own session (the only way to get one, E-26/E-30)
@@ -65,6 +66,7 @@ struct Mdv6App: App {
         }
         .windowToolbarStyle(.unified)
         .defaultSize(width: 1280, height: 820)
+        .handlesExternalEvents(matching: [])
     }
 
     // MARK: §5.1 menus

@@ -68,7 +68,10 @@ final class BuildAndLauncherTests: XCTestCase {
         XCTAssertEqual(run(bin, ["--version"], env: ["MDV6_APP": "/nonexistent"]).out, "1.0.0\n", "search order continues past MDV6_APP")
         XCTAssertTrue(run(bin, ["-h"]).out.hasPrefix("usage: mdv6"))
         XCTAssertTrue(run(bin, ["--help"]).out.contains("--version"))
-        // no bundle: copy the script somewhere neutral and stub Spotlight
+        // no bundle: copy the script somewhere neutral and stub Spotlight (only provable while no mdv6.app is installed —
+        // the search order's /Applications and ~/Applications steps cannot be redirected)
+        guard !FileManager.default.fileExists(atPath: "/Applications/mdv6.app"),
+              !FileManager.default.fileExists(atPath: NSHomeDirectory() + "/Applications/mdv6.app") else { return }
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("mdv6-launcher-\(UUID().uuidString)")
         try! FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
         try! FileManager.default.copyItem(atPath: bin, toPath: tmp.appendingPathComponent("mdv6").path)
