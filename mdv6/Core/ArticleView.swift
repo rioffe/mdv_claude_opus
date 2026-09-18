@@ -189,6 +189,9 @@ public struct ArticleBlocksView<H: ArticleHost>: View {
         ForEach(Array(blocks.enumerated()), id: \.offset) { i, block in
             ArticleBlockView(index: i, block: block, host: host, columnWidth: columnWidth, previous: i > 0 ? blocks[i - 1] : nil)
                 .id(i)
+                .background(GeometryReader { g in                       // R-27 / R-06: which block is topmost in the viewport
+                    Color.clear.preference(key: ArticleScroller.BlockFramesKey.self, value: [ArticleScroller.BlockFrame(index: i, minY: g.frame(in: .named("article")).minY)])
+                })
         }
     }
 }

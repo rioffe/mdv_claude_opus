@@ -102,6 +102,16 @@ final class BuildAndLauncherTests: XCTestCase {
         XCTAssertTrue(makefile.contains("spctl --assess"))
     }
 
+    /// R-37: the suite runs with `swift test` from a clean checkout and CI runs it on every push to `main` and every pull request.
+    func testSuiteAndCI() throws {
+        let workflow = try String(contentsOf: Self.root.appendingPathComponent(".github/workflows/build.yml"), encoding: .utf8)
+        XCTAssertTrue(workflow.contains("swift test"))
+        XCTAssertTrue(workflow.contains("branches: [main]")); XCTAssertTrue(workflow.contains("pull_request"))
+        XCTAssertTrue(workflow.contains("macos-15"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: Self.root.appendingPathComponent("Tests/mdv6Tests").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: Self.root.appendingPathComponent("Tests/mdv6RenderTests").path))
+    }
+
     /// T-34, I-011: the vendored SwiftMath carries exactly the README-listed patches — the patch markers appear only in the
     /// listed files and the font bundle is trimmed to Latin Modern Math (the full upstream diff is `tools/check-swiftmath.sh`).
     func testVendoredSwiftMathInventory() throws {
