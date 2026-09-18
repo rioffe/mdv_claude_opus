@@ -193,7 +193,7 @@ final class SessionTests: XCTestCase {
 
     // MARK: R-18 stacks (T-22, T-27, T-28)
 
-    /// R-18: loads push and clear forward; bookmark, placeholder and cold-start routes push nothing; same-document
+    /// T-22, R-18: loads push and clear forward; bookmark, placeholder and cold-start routes push nothing; same-document
     /// fragment/TOC jumps push; find never pushes; re-opening the current path pushes nothing; E-27 missing files beep.
     func testBackForward() {
         let s = session()
@@ -226,7 +226,7 @@ final class SessionTests: XCTestCase {
 
     // MARK: R-19 links (T-22)
 
-    /// R-19, C-11, E-05, E-06, E-22: resolve-then-classify; fragments decoded once; first slug wins; h4/setext unmatched;
+    /// T-22, R-19, C-11, E-05, E-06, E-22: resolve-then-classify; fragments decoded once; first slug wins; h4/setext unmatched;
     /// cross-file fragment suppresses restoration and lands on the slug or stays at the top; everything else → opener.
     func testHandleLink() {
         let s = session()
@@ -285,19 +285,32 @@ final class SessionTests: XCTestCase {
 
     // MARK: R-22 copy section
 
-    /// R-22, C-12, K-06: a heading click copies its section as Markdown and flashes it for 0.6 s.
+    /// R-22, C-12, K-06, T-30: a single click on a heading (the tap handler; ⇧-click takes the same handler since modifiers are
+    /// not distinguished) puts the section's Markdown source — from the heading to just before the next heading of the same
+    /// or a higher level — on the pasteboard and flashes the section for 0.6 s; a second click flashes it again; a `####`
+    /// heading is not a TOC heading, so it is never offered the click-to-copy handler and nothing is copied.
     func testCopySectionFlash() {
+        fs.contents["/d/deep.md"] = "# A\n\npara a1\n\n## Second heading\n\npara a3 with the word\n\n#### deep\n\npara d\n\n## Third\n\nend"
         let s = session()
-        s.open(urls: [u("/d/a.md")])
-        s.copySection(at: 3)
-        XCTAssertEqual(pasteboard, ["## Second heading\n\npara a3 with the word"])
-        XCTAssertEqual(s.flashedRange, 3..<5)
-        clock.advance(0.5); XCTAssertEqual(s.flashedRange, 3..<5)
+        s.open(urls: [u("/d/deep.md")])
+        s.copySection(at: 2)
+        XCTAssertEqual(pasteboard, ["## Second heading\n\npara a3 with the word\n\n#### deep\n\npara d"], "ends at the next same-or-higher heading; h4 does not end it")
+        XCTAssertEqual(s.flashedRange, 2..<6)
+        clock.advance(0.5); XCTAssertEqual(s.flashedRange, 2..<6)
         clock.advance(0.2); XCTAssertNil(s.flashedRange)
+        s.copySection(at: 2)
+        XCTAssertEqual(s.flashedRange, 2..<6, "clicking again flashes again")
+        XCTAssertEqual(pasteboard.count, 2, "and copies again")
+        clock.advance(0.3); s.copySection(at: 2); clock.advance(0.4)
+        XCTAssertEqual(s.flashedRange, 2..<6, "the flash restarts from the latest click")
         s.copySection(at: 0)
-        XCTAssertEqual(pasteboard.last, fs.contents["/d/a.md"]!)
-        XCTAssertEqual(s.flashedRange, 0..<5)
+        XCTAssertEqual(pasteboard.last, fs.contents["/d/deep.md"]!)
+        XCTAssertEqual(s.flashedRange, 0..<8)
         XCTAssertEqual(DocumentSession.flashDuration, 0.6)
+        // the `####` heading is block 4: not a TOC heading, so ArticleBlockView gives it plain selectable text, no copy handler
+        XCTAssertEqual(s.document!.blocks[4], "#### deep")
+        XCTAssertFalse(s.document!.tocHeadings.contains { $0.blockIndex == 4 })
+        XCTAssertEqual(BlockKind(block: s.document!.blocks[4]), .heading(4), "a heading for layout, not for copying")
     }
 
     // MARK: R-24 find (T-23, T-39)
@@ -376,7 +389,7 @@ final class SessionTests: XCTestCase {
 
     // MARK: R-06 scroll (T-28)
 
-    /// R-06, C-08, E-08: the position is persisted on switch/close and restored when the mtime is within 1 s and the anchor
+    /// T-28, R-06, C-08, E-08: the position is persisted on switch/close and restored when the mtime is within 1 s and the anchor
     /// resolves; a changed mtime starts at the top; the fingerprint follows moved content.
     func testScrollPersistAndRestore() {
         let s = session()
@@ -438,10 +451,14 @@ final class SessionTests: XCTestCase {
         e.assertForOverFulfill = false
         let w = FileWatcher(path: file, onChange: { events += 1; e.fulfill() })
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.3))
+        let burstStart = Date()
         for i in 0..<5 { try "write \(i)".write(to: file, atomically: false, encoding: .utf8); usleep(1_000) }
+        let burst = Date().timeIntervalSince(burstStart)
         wait(for: [e], timeout: 5)
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.6))
-        XCTAssertGreaterThanOrEqual(events, 1); XCTAssertLessThanOrEqual(events, 2)
+        // one immediate delivery plus one batch per 50 ms latency window the burst spanned (a loaded host stretches the burst)
+        let allowed = 1 + Int((burst / FileWatcher.latency).rounded(.up))
+        XCTAssertGreaterThanOrEqual(events, 1); XCTAssertLessThanOrEqual(events, max(2, allowed), "burst took \(burst) s")
         events = 0
         let tmp = dir.appendingPathComponent("tmp.md")
         try "renamed".write(to: tmp, atomically: false, encoding: .utf8)
@@ -450,6 +467,22 @@ final class SessionTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(events, 1)
         w.cancel()
         XCTAssertEqual(FileWatcher.latency, 0.05)
+    }
+
+    /// E-25: every document change (a load, a reload) bumps `renderGeneration`, the key the article's in-flight diagram and
+    /// math tasks are bound to, so a stale render is never shown for the new document.
+    func testRenderGenerationBumpsOnEveryDocumentChange() {
+        let s = session()
+        let g0 = s.renderGeneration
+        s.open(urls: [u("/d/a.md")])
+        XCTAssertEqual(s.renderGeneration, g0 + 1)
+        XCTAssertTrue(s.open(u("/d/b.md"), route: .adding))
+        XCTAssertEqual(s.renderGeneration, g0 + 2)
+        fs.contents["/d/b.md"] = "# B\n\nchanged"
+        watchers.last!.onChange()
+        XCTAssertEqual(s.renderGeneration, g0 + 3)
+        XCTAssertFalse(s.open(u("/d/missing.md"), route: .adding))
+        XCTAssertEqual(s.renderGeneration, g0 + 3, "an aborted load changes nothing")
     }
 
     /// E-20, T-35: the same path open in two windows — each window's watcher reloads independently.
@@ -467,7 +500,7 @@ final class SessionTests: XCTestCase {
 
     // MARK: R-40 startup (T-28), E-26 routing (T-40), R-31, R-23 (T-38)
 
-    /// R-40, D-28, D-29: launch restores exactly the history head (with position); an unreadable head stays and enters
+    /// T-28, R-40, D-28, D-29: launch restores exactly the history head (with position); an unreadable head stays and enters
     /// `EMPTY` without trying later rows; empty history → `EMPTY`; a cold-start argument pre-empts with no snapshot.
     func testStartup() {
         var s = session()

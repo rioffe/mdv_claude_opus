@@ -78,6 +78,10 @@ public struct DocumentRootView: View {
         .toolbar { toolbar }
         .onReceive(NotificationCenter.default.publisher(for: CommandCenter.name)) { handle($0) }
         .onReceive(NotificationCenter.default.publisher(for: .mdv6RevealRemoteImageSetting)) { _ in preferences.loadRemoteImages = true }
+        .onReceive(NotificationCenter.default.publisher(for: .mdv6OpenInNewWindow)) { note in
+            guard let path = note.userInfo?["path"] as? String, let target = note.userInfo?["window"] as? NSWindow, target === window else { return }
+            openWindow(id: "document", value: URL(fileURLWithPath: path))
+        }
         .onChange(of: systemScheme) { s in session.isDarkAppearance = (s == .dark) }                     // R-29 live switch
         .onAppear { session.isDarkAppearance = (systemScheme == .dark) }
         .onChange(of: preferences.fontScale) { s in showHUD(ZoomStep.hudPercent(s)) }

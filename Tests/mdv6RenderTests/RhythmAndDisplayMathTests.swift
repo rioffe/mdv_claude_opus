@@ -41,6 +41,19 @@ final class RhythmAndDisplayMathTests: XCTestCase {
         let syntax = try String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("test-docs/syntax.md"), encoding: .utf8)
         let page = try render(syntax, theme: .sevilla)
         XCTAssertGreaterThan(RenderMetrics.inkBands(page, page: MDVTheme.sevilla.rgba.background).count, 20)
+        // R-07: each GFM construct changes the rendering — strikethrough adds ink through the word, a task item draws a
+        // checkbox, a footnote adds the note section, a table draws full-width rules
+        let t = MDVTheme.highContrast
+        let plain = try render("a strike b", theme: t), struck = try render("a ~~strike~~ b", theme: t)
+        XCTAssertGreaterThan(RenderMetrics.inkedPixelCount(struck), RenderMetrics.inkedPixelCount(plain) + 40)
+        let bullet = try render("- done", theme: t), task = try render("- [x] done", theme: t)
+        XCTAssertNotEqual(RenderMetrics.pixelMismatch(bullet, task) ?? 1, 0)
+        let noNote = try render("text", theme: t), note = try render("text[^1]\n\n[^1]: the note", theme: t)
+        XCTAssertGreaterThan(note.height, noNote.height + 20)
+        let table = try render("| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |", theme: t)
+        let inline = try render("a b 1 2 3 4", theme: t)
+        XCTAssertGreaterThan(table.height, inline.height * 2, "three table rows, not one paragraph line")
+        XCTAssertGreaterThan(RenderMetrics.inkedPixelCount(table), RenderMetrics.inkedPixelCount(inline), "cell rules add ink")
         XCTAssertEqual(b.width, 1720)
         let corner = b.pixel(2, 2)
         XCTAssertEqual(corner.r, MDVTheme.highContrast.rgba.background.r)

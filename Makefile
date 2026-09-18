@@ -6,7 +6,8 @@ APP        := build/mdv6.app
 DIST       := dist
 # Release inputs (§5.3). The checked-in identity defaults name the repository owner's identity and MUST be
 # overridden by any other release engineer; VERSION is derived only from the exact tag (D-32).
-TEAM_ID        ?= XXXXXXXXXX   # the repository owner's Apple Team ID (placeholder until set)
+# TEAM_ID is the repository owner's Apple Team ID (placeholder until set)
+TEAM_ID        ?= XXXXXXXXXX
 CERT_NAME      ?= Developer ID Application: Robert Ioffe ($(TEAM_ID))
 NOTARY_PROFILE ?= mdv6-notary
 NOTES_FILE     ?=

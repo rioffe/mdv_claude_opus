@@ -138,12 +138,50 @@ final class ChromeModelTests: XCTestCase {
         XCTAssertEqual(ChromeRules.clampBookmarksHeight(300, inspectorHeight: 600), 300)
     }
 
-    /// E-30, R-40: a window the app creates is not restorable and the app does not opt into secure state restoration.
-    func testWindowsAreNotRestorable() {
+    /// C-18.1, F-003 (regression): applying the theme's colour scheme to a window is idempotent — a second application
+    /// with the same scheme schedules nothing, so the view hierarchy cannot re-render forever under a dark theme.
+    func testAppearanceAssignmentIsIdempotent() {
         let w = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
-        WindowAccessor.configure(w)
-        XCTAssertFalse(w.isRestorable)
-        XCTAssertEqual(w.tabbingMode, .disallowed)
-        XCTAssertFalse(mdv6AppDelegate().applicationSupportsSecureRestorableState(NSApplication.shared))
+        XCTAssertTrue(WindowAccessor.applyAppearance(w, isDark: true))
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+        XCTAssertEqual(w.appearance?.name, .darkAqua)
+        XCTAssertFalse(WindowAccessor.applyAppearance(w, isDark: true))
+        XCTAssertFalse(WindowAccessor.applyAppearance(w, isDark: true))
+        XCTAssertTrue(WindowAccessor.applyAppearance(w, isDark: false))
     }
+
+    /// E-30, R-40, T-28: windows are never restorable and the app opts out of state restoration, so quitting with two windows
+    /// open (⌘⇧O) and launching again yields exactly one window that follows R-40 — the history head — with the second
+    /// window's document reachable through history.
+    func testOneWindowAfterQuitWithTwoWindows() {
+        let w1 = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+        let w2 = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+        WindowAccessor.configure(w1); WindowAccessor.configure(w2)
+        XCTAssertFalse(w1.isRestorable); XCTAssertFalse(w2.isRestorable)
+        XCTAssertEqual(w1.tabbingMode, .disallowed)
+        let delegate = mdv6AppDelegate()
+        XCTAssertFalse(delegate.applicationSupportsSecureRestorableState(NSApplication.shared))
+        delegate.applicationWillFinishLaunching(Notification(name: NSApplication.willFinishLaunchingNotification))
+        XCTAssertFalse(UserDefaults.standard.bool(forKey: "NSQuitAlwaysKeepsWindows"))
+        XCTAssertTrue(UserDefaults.standard.bool(forKey: "ApplePersistenceIgnoreState"))
+        // two windows, two documents, then "quit" (both closed) and a fresh launch
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("mdv6-e30-\(UUID().uuidString)")
+        let suite = "mdv6.e30.\(UUID().uuidString)"
+        defer { UserDefaults.standard.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: dir) }
+        let fs = FileSystem.fake(files: ["/a.md": "# A", "/b.md": "# B"], mtime: 1)
+        let model = AppModel.bootstrap(supportDir: dir, defaultsSuite: suite, fileSystem: fs)
+        let s1 = DocumentSession(model: model, watcherFactory: { _, _ in NoWatch() }, pasteboard: { _ in }, systemOpener: { _ in }, beeper: {})
+        let s2 = DocumentSession(model: model, watcherFactory: { _, _ in NoWatch() }, pasteboard: { _ in }, systemOpener: { _ in }, beeper: {})
+        model.register(session: s1, window: w1); model.register(session: s2, window: w2)
+        s1.open(urls: [URL(fileURLWithPath: "/a.md")]); s2.open(urls: [URL(fileURLWithPath: "/b.md")])
+        s1.windowWillClose(); s2.windowWillClose(); model.unregister(window: w1); model.unregister(window: w2)
+        let relaunched = AppModel.bootstrap(supportDir: dir, defaultsSuite: suite, fileSystem: fs)
+        let only = DocumentSession(model: relaunched, watcherFactory: { _, _ in NoWatch() }, pasteboard: { _ in }, systemOpener: { _ in }, beeper: {})
+        relaunched.startup(arguments: [], session: only)
+        XCTAssertEqual(only.currentEntry?.path, "/b.md", "the head, per R-40")
+        XCTAssertEqual(relaunched.history.entries.map(\.path), ["/b.md", "/a.md"], "the other window's document is reachable through history")
+        XCTAssertTrue(relaunched.keySession === only, "exactly one session after launch")
+    }
+
+    final class NoWatch: FileWatching { func cancel() {} }
 }

@@ -346,6 +346,7 @@ public struct InspectorView: View {
     // MARK: bookmark rows (C-18.9)
 
     private var bookmarksPane: some View {
+        ScrollViewReader { proxy in
         List {
             if let p = placeholderStore.placeholder {
                 PlaceholderRow(placeholder: p, theme: theme, current: session.placeholderIsCurrent, hovered: hoveredPlaceholder,
@@ -355,6 +356,7 @@ public struct InspectorView: View {
                     .contextMenu { ForEach(ChromeRules.placeholderMenu, id: \.self) { item in Button(item) { session.clearPlaceholder() } } }
                     .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 0, trailing: 8))
                     .listRowSeparator(.hidden)
+                    .id("placeholder")
                 Rectangle().fill(theme.border).frame(height: ChromeMetrics.dividerWidth)
                     .padding(.horizontal, ChromeMetrics.placeholderDividerInset.horizontal)
                     .padding(.vertical, ChromeMetrics.placeholderDividerInset.vertical)
@@ -374,6 +376,8 @@ public struct InspectorView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .onChange(of: placeholderStore.placeholder) { p in if p != nil { proxy.scrollTo("placeholder", anchor: .top) } }   // R-28: the row is shown when set
+        }
     }
 
     /// C-18.9: the nine-entry menu in order with the `ChromeRules` enablement.

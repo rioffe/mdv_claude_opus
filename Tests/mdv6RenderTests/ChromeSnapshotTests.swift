@@ -11,6 +11,8 @@ import AppKit
 final class ChromeSnapshotTests: XCTestCase {
     static let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 
+    /// T-44, C-18, I-015: the three panes drawn under Sevilla, Charcoal and Twilight with accent-filled current rows and badges;
+    /// the look itself is judged from the written files in the build report.
     func testHostedWindowSnapshots() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("mdv6-snap-\(UUID().uuidString)")
         let suite = "mdv6.snap.\(UUID().uuidString)"

@@ -152,20 +152,33 @@ final class MermaidTests: XCTestCase {
         XCTAssertEqual(mirror.redComponent, bg.redComponent, accuracy: 0.02, "background below the diagram's mirror point")
     }
 
-    /// K-07, R-09, T-21: caches of 96 layouts and 192 rasters (≤ 192 MB); pinch zoom clamped to [0.5, 4]; zoomed container
-    /// ≤ 540 pt; the five styles persist under `mdv6.mermaid.style`; a PNG export is the natural size at 2× pixel density.
+    /// K-07: caches of 96 layouts and 192 rasters (≤ 192 MB); pinch zoom clamped to [0.5, 4]; zoomed container ≤ 540 pt.
     func testConstants() {
         XCTAssertEqual(MermaidCaches.layoutLimit, 96); XCTAssertEqual(MermaidCaches.rasterLimit, 192)
         XCTAssertEqual(MermaidCaches.rasterByteLimit, 192 * 1024 * 1024)
         XCTAssertEqual(MermaidZoom.range, 0.5...4.0); XCTAssertEqual(MermaidZoom.maxContainerHeight, 540)
         XCTAssertEqual(MermaidZoom.clamp(9), 4); XCTAssertEqual(MermaidZoom.clamp(0.1), 0.5)
+    }
+
+    /// R-09, T-21: the style menu offers Document, Light, Dark, Tokyo Night, Catppuccin and the choice persists document-wide
+    /// under `mdv6.mermaid.style` (an unknown stored value reads as Document); a PNG export is the natural point size at 2×
+    /// pixel density; the source view is plain monospace (no grammar), the rendered form is a native image.
+    func testStyleMenuPersistenceAndExport() throws {
         XCTAssertEqual(MermaidStyle.allCases.map(\.rawValue), ["document", "light", "dark", "tokyoNight", "catppuccin"])
         XCTAssertEqual(MermaidStyle(storedValue: "neon"), .document)
         XCTAssertEqual(Preferences.Key.mermaidStyle, "mdv6.mermaid.style")
-        let p = try! prepare("flowchart LR\n  A --> B")
+        let suite = "mdv6.mermaid.\(UUID().uuidString)"
+        defer { UserDefaults.standard.removePersistentDomain(forName: suite) }
+        let prefs = Preferences(defaults: UserDefaults(suiteName: suite)!)
+        prefs.mermaidStyle = MermaidStyle.tokyoNight.rawValue
+        XCTAssertEqual(Preferences(defaults: UserDefaults(suiteName: suite)!).mermaidStyle, "tokyoNight", "persisted across a relaunch")
+        XCTAssertEqual(MDVMermaidPipeline.theme(for: MermaidStyle(storedValue: prefs.mermaidStyle), document: .sevilla), .tokyoNight)
+        let p = try prepare("flowchart LR\n  A --> B")
         let export = MDVMermaidPipeline.rasterize(p, width: p.naturalSize.width, scale: 2)!
         let rep = export.representations.first as! NSBitmapImageRep
         XCTAssertEqual(CGFloat(rep.pixelsWide), floor(p.naturalSize.width) * 2); XCTAssertEqual(CGFloat(rep.pixelsHigh), floor(p.naturalSize.height) * 2)
+        XCTAssertEqual(export.size.width, floor(p.naturalSize.width), "natural point size")
+        XCTAssertNil(CodeLanguage.resolve(infoString: "mermaid"), "no Mermaid grammar: the source view is plain monospace")
     }
 
     /// C-06.3: the Document style derives its theme from the active `MDVTheme` — background = code-block background,

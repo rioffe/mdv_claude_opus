@@ -3,7 +3,7 @@ import AppKit
 @testable import mdv6Core
 
 /// C-17 / R-39 through `HarnessRunner` (what `tools/render-harness` links): discovery order, fallback classification,
-/// manifest rules, the metric cases, exit conditions, and determinism (I-001, E-25 via the pipeline; T-13, T-17, T-19).
+/// manifest rules, the metric cases, exit conditions, and determinism (I-001; T-13, T-17, T-19).
 @MainActor
 final class HarnessTests: XCTestCase {
     static let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -16,7 +16,7 @@ final class HarnessTests: XCTestCase {
 
     /// T-13, C-17, R-39: `--scan` discovers every raw `.mmd` and every Mermaid fence in `.md`, ordered by UTF-8 bytes of the
     /// relative path then fence index; E-02 unsupported types report `fallback`, everything else `pass`; a second run
-    /// yields identical records and identical PNG bytes (I-001) — a stale layout can never be shown for another case (E-25).
+    /// yields identical records and identical PNG bytes (I-001).
     func testScanCorpusOrderAndDeterminism() throws {
         let corpus = Self.root.appendingPathComponent("test-docs/mermaid")
         let cases = HarnessRunner.scan(root: corpus)

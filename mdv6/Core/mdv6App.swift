@@ -56,6 +56,7 @@ struct Mdv6App: App {
             MainWindowContent()
         }
         .windowToolbarStyle(.unified)
+        .defaultSize(width: 1280, height: 820)
         .commands { commands }
 
         // ⌘⇧O: a second window with its own session (the only way to get one, E-26/E-30)
@@ -63,6 +64,7 @@ struct Mdv6App: App {
             SecondaryWindowContent(url: url)
         }
         .windowToolbarStyle(.unified)
+        .defaultSize(width: 1280, height: 820)
     }
 
     // MARK: §5.1 menus

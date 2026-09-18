@@ -84,7 +84,7 @@ final class BuildAndLauncherTests: XCTestCase {
     /// from the exact tag (the signing/notarisation run needs credentials and a tag and is recorded separately).
     func testDistRefusesWithoutExactTag() {
         let tag = run("/usr/bin/git", ["describe", "--tags", "--exact-match"])
-        guard tag.status != 0 else { return }                                    // a tagged checkout is the T-43 environment
+        XCTAssertNotEqual(tag.status, 0, "this checkout is untagged: the T-43 signing/notarisation run is recorded as pending, its tag gate is proved here")
         let dist = run("/usr/bin/make", ["dist"])
         XCTAssertNotEqual(dist.status, 0); XCTAssertTrue(dist.out.contains("check-version"))
         XCTAssertFalse(dist.out.contains("swift build")); XCTAssertFalse(dist.out.contains("rm -rf build"))
@@ -100,6 +100,61 @@ final class BuildAndLauncherTests: XCTestCase {
         XCTAssertTrue(makefile.contains("--options runtime --timestamp"))
         XCTAssertTrue(makefile.contains("xcrun stapler validate"))
         XCTAssertTrue(makefile.contains("spctl --assess"))
+    }
+
+    /// T-43, K-11, R-34: in a disposable clone whose `HEAD` carries the exact tag `v1.2.3`, the release chain names
+    /// `dist/mdv6-1.2.3-macos.zip` and its `.sha256` from the tag alone, signs with Developer ID under the hardened runtime
+    /// with a timestamp, notarises, staples, verifies with `codesign --verify --deep --strict`, `spctl` and `stapler validate`
+    /// (the chain is dry-run here: this host has no signing identity or notary profile, so the credentialed run is pending),
+    /// and a command-line `VERSION` is refused before any artefact can be named after it.
+    func testTaggedCheckoutNamesArtefactsFromTag() throws {
+        let clone = FileManager.default.temporaryDirectory.appendingPathComponent("mdv6-t43-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: clone) }
+        XCTAssertEqual(run("/usr/bin/git", ["clone", "-q", "--depth", "1", "file://" + Self.root.path, clone.path]).status, 0)
+        XCTAssertEqual(run("/usr/bin/git", ["tag", "v1.2.3"], cwd: clone).status, 0)
+        let dry = run("/usr/bin/make", ["-n", "dist"], cwd: clone)
+        XCTAssertEqual(dry.status, 0, dry.err)
+        XCTAssertTrue(dry.out.contains("check-version: releasing v1.2.3"))
+        XCTAssertTrue(dry.out.contains("ditto -c -k --keepParent build/mdv6.app dist/mdv6-1.2.3-macos.zip"))
+        XCTAssertTrue(dry.out.contains("shasum -a 256 mdv6-1.2.3-macos.zip > mdv6-1.2.3-macos.zip.sha256"))
+        XCTAssertTrue(dry.out.contains("codesign --force --deep --options runtime --timestamp --sign \"Developer ID Application:"))
+        XCTAssertTrue(dry.out.contains("xcrun notarytool submit dist/mdv6-notary.zip --keychain-profile"))
+        XCTAssertTrue(dry.out.contains("xcrun stapler staple build/mdv6.app"))
+        XCTAssertTrue(dry.out.contains("ditto -x -k dist/mdv6-1.2.3-macos.zip dist/verify"))
+        XCTAssertTrue(dry.out.contains("codesign --verify --deep --strict dist/verify/mdv6.app"))
+        XCTAssertTrue(dry.out.contains("spctl --assess --type execute --verbose=4 dist/verify/mdv6.app"))
+        XCTAssertTrue(dry.out.contains("xcrun stapler validate dist/verify/mdv6.app"))
+        let steps = ["make clean", "make release", "make sign", "make zip-notary", "make notarize", "make staple", "make zip-release", "make checksum", "make verify-release"]
+        let positions = steps.map { dry.out.range(of: $0)?.lowerBound }
+        XCTAssertEqual(positions.compactMap { $0 }.count, steps.count, "every step of the chain")
+        XCTAssertEqual(positions.compactMap { $0 }, positions.compactMap { $0 }.sorted(), "in §5.3 order")
+        XCTAssertFalse(dry.out.contains("v1.2.3-macos"), "the artefact carries the version without its v")
+        let forced = run("/usr/bin/make", ["dist", "VERSION=9.9.9"], cwd: clone)
+        XCTAssertNotEqual(forced.status, 0); XCTAssertTrue(forced.out.contains("command line"))
+        XCTAssertFalse(forced.out.contains("9.9.9-macos")); XCTAssertFalse(FileManager.default.fileExists(atPath: clone.appendingPathComponent("dist").path))
+    }
+
+    /// T-32, K-15, I-008: the idle-math CPU protocol — `test-docs/math.md` visible and untouched for 5 s, then 30 one-second
+    /// process-CPU samples: median ≤ 1 %, nearest-rank p95 ≤ 3 % (`tools/idle-cpu.sh` runs the app on an isolated store).
+    func testIdleMathCPU() {
+        XCTAssertTrue(FileManager.default.fileExists(atPath: app.path), "run `make` before `swift test`")
+        // K-15 is a measurement on an otherwise idle host: under `swift test --parallel` wait for the sibling workers to drain
+        let deadline = Date().addingTimeInterval(600)
+        while Date() < deadline {
+            let others = run("/usr/bin/pgrep", ["-f", "PackageTests.xctest"]).out.split(separator: "\n").filter { Int32($0) != getpid() }
+            if others.isEmpty { break }
+            Thread.sleep(forTimeInterval: 2)
+        }
+        let r = run("/bin/bash", ["tools/idle-cpu.sh"], env: ["MDV6_SUPPORT_DIR": NSTemporaryDirectory() + "mdv6-idle-test", "MDV6_DEFAULTS_SUITE": "mdv6.idle.test"])
+        XCTAssertEqual(r.status, 0, r.out)
+        let samples = r.out.split(separator: "\n").first { $0.hasPrefix("samples:") }.map { $0.dropFirst("samples:".count).split(separator: " ").compactMap { Double($0) } } ?? []
+        XCTAssertEqual(samples.count, 30, "thirty one-second samples")
+        let sorted = samples.sorted()
+        let median = sorted.count == 30 ? (sorted[14] + sorted[15]) / 2 : .infinity
+        let p95 = sorted.count == 30 ? sorted[28] : .infinity                    // nearest rank: ceil(0.95 × 30) = 29th
+        XCTAssertLessThanOrEqual(median, 1.0, "K-15 median ≤ 1 %: \(samples)")
+        XCTAssertLessThanOrEqual(p95, 3.0, "K-15 nearest-rank p95 ≤ 3 %: \(samples)")
+        UserDefaults.standard.removePersistentDomain(forName: "mdv6.idle.test")
     }
 
     /// R-37: the suite runs with `swift test` from a clean checkout and CI runs it on every push to `main` and every pull request.
