@@ -269,6 +269,99 @@ final class SessionTests: XCTestCase {
         XCTAssertEqual(s.currentEntry?.path, "/d/c.md")
     }
 
+    // MARK: C-19 line citations (T-49)
+
+    /// `test-docs/links-sibling.md` (11 lines), the fixture T-49 and T-50 name.
+    private var linkFixture: String {
+        "# Sibling\n\nParagraph one of the sibling, linked from [links.md](links.md).\n\n"
+        + "## Second heading\n\nParagraph under the second heading.\n\n"
+        + "## Third heading\n\nParagraph under the third heading.\n"
+    }
+
+    /// T-49, R-18, R-19, C-19.4, E-29, C-18.8: a same-document line citation scrolls to the block containing its start
+    /// line and flashes it, pushing no back snapshot and selecting no TOC row — while the slug form still does both.
+    func testLineCitationSameDocument() {
+        fs.contents["/d/links-sibling.md"] = linkFixture
+        let s = session()
+        XCTAssertTrue(s.open(u("/d/links-sibling.md"), route: .adding))
+        XCTAssertEqual(s.document?.lineCount, 11)
+        XCTAssertEqual(s.document?.blockLines, [1..<2, 3..<4, 5..<6, 7..<8, 9..<10, 11..<12])
+        XCTAssertFalse(s.canGoBack)
+
+        s.handleLink(URL(string: "#L7-L9")!)                                    // resolved by the start line: the paragraph
+        XCTAssertEqual(s.scrollTarget?.block, 3)
+        XCTAssertEqual(s.flashedRange, 3..<4)
+        XCTAssertFalse(s.canGoBack, "R-18/C-19.4: a citation is a position move, not a choice")
+        XCTAssertNil(s.tocSelectedBlock)
+
+        s.handleLink(URL(string: "#l11")!)                                      // case-insensitive
+        XCTAssertEqual(s.scrollTarget?.block, 5)
+        XCTAssertEqual(s.flashedRange, 5..<6)
+
+        s.handleLink(URL(string: "#L10")!)                                      // a removed gap clamps to the block before it
+        XCTAssertEqual(s.scrollTarget?.block, 4)
+
+        s.handleLink(URL(string: "#L99")!)                                      // E-31: past lineCount → the last block
+        XCTAssertEqual(s.scrollTarget?.block, 5)
+
+        // E-06: not a citation, and no heading slugged `l0` → a no-op that does not move the viewport
+        s.handleLink(URL(string: "#L0")!)
+        XCTAssertEqual(s.scrollTarget?.block, 5, "E-06: `#L0` is a slug fragment, not a citation")
+        XCTAssertEqual(opened, [], "E-06: nothing is handed to the opener")
+
+        // the slug form still pushes a snapshot and selects the TOC row (C-18.8, E-29)
+        s.handleLink(URL(string: "#third-heading")!)
+        XCTAssertEqual(s.scrollTarget?.block, 4)
+        XCTAssertEqual(s.tocSelectedBlock, 4)
+        XCTAssertTrue(s.canGoBack)
+    }
+
+    /// T-49, R-19, C-19, E-31: a cross-file citation loads the target as an adding route, suppresses R-06 restoration,
+    /// then scrolls to and flashes the resolved block; `#L12` past the target's line count flashes its last block.
+    func testLineCitationCrossFile() {
+        fs.contents["/d/links-sibling.md"] = linkFixture
+        let s = session()
+        XCTAssertTrue(s.open(u("/d/a.md"), route: .adding))
+        model.database.saveScrollPosition(path: "/d/links-sibling.md", blockIndex: 5,
+                                          fingerprint: bookmarkFingerprint("Paragraph under the third heading."), fileMtime: 100)
+
+        s.handleLink(URL(string: "links-sibling.md#L7-L9")!)
+        XCTAssertEqual(s.currentEntry?.path, "/d/links-sibling.md")
+        XCTAssertEqual(model.history.entries.first?.path, "/d/links-sibling.md")
+        XCTAssertEqual(s.scrollTarget?.block, 3, "R-19: the citation overrides the saved scroll position")
+        XCTAssertEqual(s.flashedRange, 3..<4)
+        XCTAssertNil(s.tocSelectedBlock, "C-19.4: a cross-file citation selects no TOC row")
+        XCTAssertTrue(s.canGoBack, "R-19: the cross-file load still pushes")
+        XCTAssertEqual(model.database.search("sibling").first?.path, "/d/links-sibling.md", "R-19: an adding route indexes")
+
+        s.handleLink(URL(string: "links-sibling.md#L12")!)
+        XCTAssertEqual(s.scrollTarget?.block, 5, "E-31: past lineCount → the last block")
+
+        // C-19.5: a citation into a non-Markdown target never reaches C-19 — the system opener takes it
+        let before = model.history.entries.map(\.path)
+        s.handleLink(URL(string: "notes.txt#L7")!)
+        XCTAssertEqual(opened.last?.path, "/d/notes.txt")
+        XCTAssertEqual(model.history.entries.map(\.path), before)
+    }
+
+    /// T-49, C-19.3, C-19.4, K-06: two citations in succession leave one live flash — the second cancels the first —
+    /// and the flash clears after 0.6 s.
+    func testLineCitationFlashRestartsAndExpires() {
+        fs.contents["/d/links-sibling.md"] = linkFixture
+        let s = session()
+        s.open(u("/d/links-sibling.md"), route: .adding)
+
+        s.handleLink(URL(string: "#L1")!)
+        XCTAssertEqual(s.flashedRange, 0..<1)
+        clock.advance(0.3)
+        s.handleLink(URL(string: "#L11")!)
+        XCTAssertEqual(s.flashedRange, 5..<6)
+        clock.advance(0.3)
+        XCTAssertEqual(s.flashedRange, 5..<6, "C-19.4: the second click took the flash over")
+        clock.advance(0.3)
+        XCTAssertNil(s.flashedRange, "K-06: the flash lasts 0.6 s")
+    }
+
     // MARK: E-29 TOC selection
 
     /// R-21, E-29, D-41: the selected row is choice-driven — scrolling keeps it, a reload keeps it while the heading survives at

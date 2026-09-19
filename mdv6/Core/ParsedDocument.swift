@@ -20,13 +20,19 @@ public struct TOCHeading: Equatable {
 public struct ParsedDocument: Equatable {
     public let raw: String
     public let blocks: [String]
+    /// C-02 rule 8: half-open 1-based source-line ranges, one per block — `blockLines[i]` covers exactly `blocks[i]`.
+    public let blockLines: [Range<Int>]
+    /// C-02 rule 8: the normalised line count (rule 6; a trailing newline adds no empty final line).
+    public let lineCount: Int
     public let tocHeadings: [TOCHeading]
 
     public init(raw: String) {
         self.raw = raw
-        let blocks = ParsedDocument.parseBlocks(raw)
-        self.blocks = blocks
-        self.tocHeadings = ParsedDocument.parseTOC(blocks: blocks)
+        let split = ParsedDocument.split(raw)                 // one split per load (I-004)
+        self.blocks = split.blocks
+        self.blockLines = split.lines
+        self.lineCount = split.lineCount
+        self.tocHeadings = ParsedDocument.parseTOC(blocks: split.blocks)
     }
 
     public static func == (a: ParsedDocument, b: ParsedDocument) -> Bool { a.raw == b.raw }
@@ -39,30 +45,41 @@ public struct ParsedDocument: Equatable {
         return s.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
     }
 
-    /// C-02 rules 1–6 (fences per E-23: any run of the same three-character marker closes; unclosed runs to the end;
-    /// indented code is not recognised).
-    public static func parseBlocks(_ input: String) -> [String] {
-        let lines = normalizeLineEndings(input).split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    /// C-02 rules 1–8 in one pass: the blocks, their half-open 1-based source-line ranges (rule 8), and the line count.
+    /// `blocks[i]` is exactly `lines[i]` of the normalised input, with rule 5's trimming applied (I-004).
+    public static func split(_ input: String) -> (blocks: [String], lines: [Range<Int>], lineCount: Int) {
+        var lines = normalizeLineEndings(input).split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        if lines.last == "" { lines.removeLast() }        // rule 8: a trailing newline adds no empty final line
         var blocks: [String] = []
+        var ranges: [Range<Int>] = []
         var current: [String] = []
+        var start: Int? = nil                             // 1-based line of `current[0]`
         var fence: String? = nil        // "```" or "~~~" while inside a code fence (rule 2)
         var inMathFence = false         // rule 3
 
+        func append(_ line: String, at lineNo: Int) {
+            if start == nil { start = lineNo }
+            current.append(line)
+        }
         func flush() {
-            let joined = current.joined(separator: "\n")
-            let trimmed = trimNewlines(joined)
-            if !trimmed.isEmpty { blocks.append(trimmed) }
+            let trimmed = trimNewlines(current.joined(separator: "\n"))
+            if !trimmed.isEmpty, let s = start {
+                blocks.append(trimmed)
+                ranges.append(s ..< (s + current.count))
+            }
             current = []
+            start = nil
         }
 
-        for line in lines {
+        for (i, line) in lines.enumerated() {
+            let lineNo = i + 1
             if let marker = fence {
-                current.append(line)
+                append(line, at: lineNo)
                 if leadingNonSpace(line).hasPrefix(marker) { fence = nil }
                 continue
             }
             if inMathFence {
-                current.append(line)
+                append(line, at: lineNo)
                 if line.contains("$$") { inMathFence = false }
                 continue
             }
@@ -73,23 +90,29 @@ public struct ParsedDocument: Equatable {
             let head = leadingNonSpace(line)
             if head.hasPrefix("```") {  // rule 2
                 fence = "```"
-                current.append(line)
+                append(line, at: lineNo)
                 continue
             }
             if head.hasPrefix("~~~") {
                 fence = "~~~"
-                current.append(line)
+                append(line, at: lineNo)
                 continue
             }
             if head.hasPrefix("$$") && !head.dropFirst(2).contains("$$") {   // rule 3
                 inMathFence = true
-                current.append(line)
+                append(line, at: lineNo)
                 continue
             }
-            current.append(line)
+            append(line, at: lineNo)
         }
         flush()
-        return blocks
+        return (blocks, ranges, lines.count)
+    }
+
+    /// C-02 rules 1–6 (fences per E-23: any run of the same three-character marker closes; unclosed runs to the end;
+    /// indented code is not recognised). A thin wrapper over `split`, so the blocks and their line map cannot drift.
+    public static func parseBlocks(_ input: String) -> [String] {
+        split(input).blocks
     }
 
     /// C-02 rule 7: `#`/`##`/`###` single-line ATX headings outside fences, first line only.

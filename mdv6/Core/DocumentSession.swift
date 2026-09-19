@@ -360,7 +360,8 @@ public final class DocumentSession: ObservableObject, ArticleHost {
         let resolved = pathPart.map { URL(fileURLWithPath: $0).standardizedFileURL.path }
         // same-document fragment
         if resolved == nil || resolved == currentPath {
-            if fragment != nil, let doc = document {
+            if let doc = document {
+                if applyLineCitation(decodedFragment, in: doc) { return }           // R-19 (1): the citation form wins
                 if let block = slugTarget(decodedFragment, in: doc) {
                     pushSameDocumentSnapshot()
                     tocSelectedBlock = block
@@ -375,17 +376,37 @@ public final class DocumentSession: ObservableObject, ArticleHost {
         guard let target = resolved, fileSystem.exists(target), !fileSystem.isDirectory(target),
               DocumentSession.markdownExtensions.contains((target as NSString).pathExtension.lowercased()) else {
             // E-05: missing / other extension → the opener, given the resolved path for a scheme-less destination (a bare
-            // relative URL cannot be opened by anything; the resolved file: URL lets the system report the failure)
+            // relative URL cannot be opened by anything; the resolved file: URL lets the system report the failure).
+            // C-19.5: a citation to a non-Markdown target takes this branch too and never reaches C-19.
             systemOpener(url.scheme == nil ? resolved.map { URL(fileURLWithPath: $0) } ?? url : url); return
         }
         guard open(URL(fileURLWithPath: target), route: .adding, suppressRestore: fragment != nil) else { systemOpener(url); return }
-        if fragment != nil, let doc = document {
+        if let doc = document {
+            if applyLineCitation(decodedFragment, in: doc) { return }
             if let block = slugTarget(decodedFragment, in: doc) {
                 tocSelectedBlock = block                                            // E-29: a cross-file fragment selects
                 topVisibleBlock = block
                 requestScroll(to: block)
             }                                                                       // E-06: no match → stays at the top
         }
+    }
+
+    /// R-19 (1), C-19.3/C-19.4: a line citation scrolls the block containing its start line to the top and flashes it.
+    /// It is a *position* move, not a *choice*, so it pushes no back snapshot (R-18) and selects no TOC row (E-29).
+    /// Returns false when the fragment is not a citation, so the caller falls through to C-11 slug matching; true when
+    /// it was one, whether or not it resolved (an empty document scrolls to the top and flashes nothing).
+    @discardableResult
+    private func applyLineCitation(_ fragment: String?, in doc: ParsedDocument) -> Bool {
+        guard let fragment, let citation = LineCitation.parse(fragment) else { return false }
+        guard let block = lineCitationBlock(citation, in: doc) else {
+            topVisibleBlock = 0
+            requestScroll(to: 0)
+            return true
+        }
+        topVisibleBlock = block
+        requestScroll(to: block)
+        flashBlocks(block..<(block + 1))                                            // D-44: the block, not the line run
+        return true
     }
 
     /// C-11: the first TOC heading whose slug equals the fragment's slug (D-17: first in document order).
@@ -402,6 +423,12 @@ public final class DocumentSession: ObservableObject, ArticleHost {
         guard let doc = document, index < doc.blocks.count else { return }
         let range = sectionRange(blocks: doc.blocks, tocHeadings: doc.tocHeadings, headingAt: index)
         pasteboard(doc.blocks[range].joined(separator: "\n\n"))
+        flashBlocks(range)
+    }
+
+    /// K-06 / R-22 / C-19.3: the one accent flash. Heading copy and a line citation share it, so a second click takes it
+    /// over (C-19.4) and its duration is the single K-06 constant.
+    private func flashBlocks(_ range: Range<Int>) {
         flashedRange = nil
         flashedRange = range
         flashTimer?.cancel()

@@ -104,6 +104,7 @@ public struct WindowAccessor: NSViewRepresentable {
                     case "toggleInspector": session.model.preferences.inspectorVisible.toggle()
                     case "newWindow": if let path = note.userInfo?["path"] as? String { NotificationCenter.default.post(name: .mdv6OpenInNewWindow, object: nil, userInfo: ["path": path, "window": window]) }
                     case "openHit": if let path = note.userInfo?["path"] as? String { session.openHit(path: path) }
+                    case "linkClicked": if let raw = note.userInfo?["path"] as? String, let url = URL(string: raw) { session.linkClicked(url) }
                     case "collapseSidebar": session.model.preferences.sidebarCollapsed = true
                     case "expandSidebar": session.model.preferences.sidebarCollapsed = false
                     default: break
