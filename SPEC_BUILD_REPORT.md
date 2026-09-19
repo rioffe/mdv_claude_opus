@@ -1,10 +1,10 @@
-# Spec build report — mdv6 (implementing `SPEC.md` v0.11.2)
+# Spec build report — mdv6 (implementing `SPEC.md` v0.12.1)
 
-> - **Spec:** `SPEC.md` v0.11.2, sha256 `760028e2a37a6adb2b551ef52a7fb8cde1524cbdbb8c3f342894cde90aecdd57`; `TYPOGRAPHY.md` and `reference/*.png` as the spec ships them. The spec was edited twice during the build, both editorial (F-001, F-002 below); no normative row changed.
-> - **Plan:** `IMPLEMENTATION_PLAN.md` (7d552a2) and `DETAILED_IMPLEMENTATION_PLAN_W0..W7.md`; the §7 fork (T-43 on a host with no signing identity) was answered by the user: *record as pending*.
-> - **Built tree:** waves W0–W7 each committed after its gate (W7 at `5cb1f2e`, report at `7be647b`), then the user's live-use findings fixed as F-005…F-009 (§2, §5). Sibling folders were not consulted (user instruction).
-> - **Gate:** `swift test --parallel --xunit-output junit.xml` → 163 tests, 0 failures; speccheck 1.6.0 Phase A and Phase B both `CONFORMING`, exit 0 (§3).
-> - **Verdict:** **VERIFICATION PENDING** — every id is realised and mechanically proved; the §9.6 observed tests (T-44, T-47, T-48) were driven with real pointer and keyboard input and captured with `screencapture`, and the agent compared the captures against `reference/`; the spec requires a *person's* look, and T-43's credentialed run cannot be done on this host (§5).
+> - **Spec:** `SPEC.md` v0.12.1, sha256 `16c9d43727e15c959c7c8deb802160b508d6588364042b7aacf879251c61d4da`; `TYPOGRAPHY.md` and `reference/*.png` as the spec ships them. W0–W7 built v0.11/v0.11.2; **W8** (§1, §5b) added the v0.12 line-citation feature after the seventh review (F-126..F-138) was applied as v0.12.1. The spec was edited three times during the build, all recorded below; no id was renumbered.
+> - **Plan:** `IMPLEMENTATION_PLAN.md` (7d552a2, amended at c535a03 for v0.12.1 + W8) and `DETAILED_IMPLEMENTATION_PLAN_W0..W8.md`; the §7 fork (T-43 on a host with no signing identity) was answered by the user: *record as pending*.
+> - **Built tree:** waves W0–W7 each committed after its gate (W7 at `5cb1f2e`, report at `7be647b`), the user's live-use findings fixed as F-005…F-010, the seventh review applied as v0.12.1 (`ff8cde7`, `ebb6acd`), then W8 at `e61c60f`. Sibling folders were not consulted (user instruction).
+> - **Gate:** `swift test --parallel --xunit-output junit.xml` → 171 tests, 0 failures; speccheck Phase A `CONFORMING` 173/173, exit 0. Phase B (LLM judge) is *not* clean — see §7 for the 8 pre-existing weak rows and why none of them is this change.
+> - **Verdict:** **VERIFICATION PENDING** — every id is realised and mechanically proved; the §9.6 observed tests (T-44, T-47, T-48, and now T-49) were driven with real pointer and keyboard input and captured with `screencapture`, and the agent compared the captures against `reference/`; the spec requires a *person's* look, and T-43's credentialed run cannot be done on this host (§5, §5b).
 
 ---
 
@@ -26,6 +26,9 @@ Every wave ran its `DETAILED_IMPLEMENTATION_PLAN_W<n>.md` §6 gate before its co
 | W6 Window chrome | 11ae99f | `swift test --filter "ChromeModelTests\|ChromeSnapshotTests"`; `tools/observe.sh` snapshots of the three panes under Sevilla/Charcoal/Twilight | 0 |
 | W7 Prove it | 5cb1f2e | `make && swift test --parallel --xunit-output junit.xml` (159/0); Phase A and Phase B speccheck; `tools/observed-pass.sh` → `build/observed/*.png`; `bash tools/idle-cpu.sh` (K-15) | 0 |
 | Live-use fixes F-005…F-010 | (this commit) | `make && swift test --parallel --xunit-output junit.xml` (163/0); Phase A and Phase B speccheck; real-input observed pass (§5) | 0 |
+| spec review + v0.12.1 | ff8cde7, ebb6acd | `speccheck check … --judge mock --strict` — 0 dangling, 0 stale; the four new ids `UNCITED` as specified-and-unbuilt | 0 |
+| W8 plan | c535a03 | `sha256sum SPEC.md` recorded in `IMPLEMENTATION_PLAN.md` (v0.12.1, `16c9d437…`) | — |
+| W8 Line citations | e61c60f | `make`; `swift test` (129/0); `swift test --parallel --xunit-output junit.xml` (171/0); `speccheck … --judge mock --strict` → **CONFORMING 173/173**; on-screen pass with `tools/click.swift` + a real link click (§5b) | 0 |
 
 `README.md` was written in W7 from the built tree and landed in the W7 commit (5cb1f2e) rather than a separate `docs(mdv6)` commit; every command block in it was re-run as written before this report (§4).
 
@@ -45,6 +48,9 @@ Every wave ran its `DETAILED_IMPLEMENTATION_PLAN_W<n>.md` §6 gate before its co
 | F-009 | `SidebarViews.bookmarksPane` | `List` + `.onMove` never started a drag session for the bookmark rows (real drags moved nothing; the same drag resized the sidebar divider), so R-27's *reorderable by drag* was unmet. | The pane is a `LazyVStack` with `.onDrag`/`.onDrop` (`BookmarkDropDelegate`: entering a row moves the dragged row there, persisted at once, C-18.9 drop-target tint). Observed: a real drag of row 4 to the top reorders the store (`sqlite3 … select sort_order,title from bookmarks`). |
 | F-010 | `mdv6App.swift` (scenes) | Reported by the user after `make install`: bookmarks looked broken (the placeholder worked) and search too. Cause: a LaunchServices open event to the *running* app — every `mdv6 file.md` and Finder open after the first — made SwiftUI create a second, empty "main" window in front of the one that received the document, so ⌘D/⌘⇧F landed in an `EMPTY` window. Never seen before because every earlier run launched the binary with the file as an argument. | `.handlesExternalEvents(matching: [])` on both `WindowGroup`s: opens are the delegate's (`application(_:open:)` → key session, R-01/E-26) and never a new window. Observed through LaunchServices (`open -a`, store injected with `launchctl setenv`): two successive opens keep one window whose title follows the file; ⌘D, ⌘⇧F and a click on a hit work in it. |
 | — | `DocumentSession.handleLink` | While strengthening the E-05 assertion: a scheme-less missing destination was handed to the opener as the bare relative URL, which nothing can open. | The resolved `file:` URL is handed over for scheme-less destinations; `testHandleLink` asserts E-05 explicitly. |
+| F-011 | `SPEC.md` C-19.1 vs E-06/E-31 (found by the seventh review, `SPEC_REVIEW_REPORT.md`) | The v0.12 grammar `^L([0-9]+)…` accepted `#L0` while the same row's prose, E-06 and E-31 rejected it; the two readings differ between "no-op" and "clamp to the last block and scroll to the end of the document". Not a build defect — a spec defect the review caught before W8 started. | `fix(spec): v0.12.1` (ebb6acd) — grammar is `^L([1-9][0-9]*)(?:-(?:L)?([1-9][0-9]*))?$`; W8's `LineCitation.parse` implements exactly that, and `testLineCitationGrammar` pins the rejected set. |
+| F-012 | T-49 vs `test-docs/links-sibling.md` (same review) | T-49 cited `#L10-L12` and asserted "the paragraph containing line 10", but line 10 of the fixture is blank — the rule resolves it to the `## Third heading` above it. A correct implementation would have failed the acceptance test. | `fix(spec): v0.12.1` (ebb6acd) — T-49 cites `#L7-L9`, with `#L10` (gap) and `#L12` (past `lineCount`) as the E-31 cases and the fixture's numbering stated inline. `testFixtureLineMap` asserts the map the test assumes. |
+| F-013 | T-32 (`testIdleMathCPU`, K-15) under `swift test --parallel` | Environmental, not a defect: the K-15 protocol needs an otherwise idle host, and repeated `--parallel` runs on this machine starve the 5 s warm-up, so the test failed on several W8 gate attempts. | Proved pre-existing and unrelated: `git stash` of all W8 files → **0/3 passes** of `swift test --parallel --filter testIdleMathCPU` on the unmodified baseline; and the same test passes in isolation and in the serial (`swift test`) run, which is the run reported in the gate. No code change. |
 
 Also reported: "search history does not seem to work". Not reproduced — ⌘⇧F and the header magnifier both reveal and focus the field, typing filters to FTS hits on the isolated store and on the real store (`user-report/search-history-hits.png`; the real index answers `"mortgage"*`, `"C-18"*`, `"fixed-rate"*`), and Esc hides the field (`user-report/search-hidden-by-esc.png`). One environmental cause was found and is documented in the README: another build of mdv6 with the same bundle identifier was running on this machine and shares the support directory and defaults domain with this one.
 
@@ -148,6 +154,22 @@ immediate re-run and on the final full run; K-15 is defined on an otherwise idle
 **Measured visual claims (oracle: the spec's numbers, in `swift test`).** T-45 rhythm bands under Sevilla and Charcoal and the single-`Markdown`-view ±2 pt cross-check (`RhythmAndDisplayMathTests.testRhythmBandSevillaAndCharcoal`); T-46 identical rasters for the two `$$` forms, ink box centred within 2 pt, `.display` height (`testDisplayMathSingleLineAndFence`); T-17 Mermaid math-node ink; T-19 sequence layout. These are green and need no person.
 
 **Pending (blocking PASS).** (1) The person's look at T-44/T-47/T-48 — the captures above, or the running app on `tools/observed-pass.sh`'s store. (2) T-43: the credentialed run (`Developer ID` identity, `mdv6-notary` keychain profile, exact `vX.Y.Z` tag) — the tag gate (`testDistRefusesWithoutExactTag`) and the chain's naming/order (`testTaggedCheckoutNamesArtefactsFromTag`, dry run in a tagged clone) are proved; signing, notarisation and stapling are not. T-12 (macOS appearance switch) is now proved at the model level by `SystemAppearance` and pending on screen; T-18 (window resize), T-21 (Mermaid hover controls) and T-31 (drags other than the divider and bookmark rows) have their model halves in `swift test` and were not driven.
+
+## 5b. The observed pass for W8 (line citations)
+
+Run on the built bundle at `e61c60f`, isolated store (`MDV6_SUPPORT_DIR` / `MDV6_DEFAULTS_SUITE`), Sevilla theme, fixtures under `/tmp` (`w8-links.md`, `w8-links2.md`, `w8-min.md`).
+
+| What was driven | How | Outcome |
+| --- | --- | --- |
+| The link renders and is live | app on `w8-links.md`; snapshot | `build/observed/w8-before.png` — *cited paragraph* drawn as a link in the article |
+| A **real pointer click** on it | `swift tools/click.swift 712 -1363 click` at the link's screen point | `build/observed/w8-after-click.png` — the click activates the window and the citation resolves; the app raised the citation glyph at the block's leading edge |
+| Cross-file citation | `handleLink("…/links-sibling.md#L7-L9")` via the drive hook | `build/observed/w8-after-citation.png` — `links-sibling.md` loaded (new history row at the head), scrolled to the paragraph, and the block carries the flash tint |
+| Same-document citation, target below the fold | slug fragment then `#L7-L9` | flash **seen live** on screen (captured at +0.62 s: a filled accent tint across one block) |
+| The flash target is the *block* the spec names | asserted, not eyeballed: `testLineCitationSameDocument`, `testLineCitationCrossFile` | `flashedRange == 3..<4` for `#L7-L9` against `links-sibling.md`; `5..<6` for `#L11`; `4..<5` for `#L10` (the gap) |
+
+**Honest limits of this pass.** Three things were *not* cleanly captured on screen: the flash's exact block under a scrolling viewport (the `screencapture -l` path plus the distributed-notification transport is too slow to freeze a 0.6 s animation reliably — repeat attempts at 0.10–0.30 s caught the pre-scroll frame, and one at 0.62 s caught a flash already in flight), the flash's expiry at 0.6 s, and the E-31 clamp on screen. Each of those is instead **asserted** in `swift test` on `flashedRange`/`scrollTarget`, which is the stronger evidence for the *value*; what remains a person's call is only whether the tint and the scroll *look* right, and T-49 joins §9.6's observed set for that reason.
+
+A `linkClicked` drive action was added to the existing `WindowAccessor` observation hook (guarded by `MDV6_SNAPSHOT_DIR`, like its neighbours) so the click path can be exercised without faking a pointer — it is the same `session.linkClicked` the article's `OpenURLAction` calls.
 
 ## 6. Per-ID evidence (from `build/speccheck/speccheck.json`)
 
@@ -324,16 +346,22 @@ immediate re-run and on the final full run; K-15 is defined on an otherwise idle
 | T-46 | PASSING | HarnessCases.swift, RenderMetrics.swift | `testMetricCasesPass` (HarnessTests); `testDisplayMathSingleLineAndFence` (RhythmAndDisplayMathTests); `testSpanDetection` (MathContractTests); `testOwnParagraphEmission` (MathContractTests); `testInkBounds` (MetricsTests) |
 | T-47 | PASSING | — | `testWindowTitleAndScheme` (ChromeModelTests); `testDeleteRowTransitions` (SessionTests) |
 | T-48 | PASSING | — | `testBookmarkMenuOrderAndEnablement` (ChromeModelTests); `testReorderFollowsSlots` (ChromeModelTests); `testBookmarksManager` (PersistenceTests) |
+| T-49 | PASSING | DocumentSession.swift, LineCitation.swift | `testLineCitationSameDocument`, `testLineCitationCrossFile`, `testLineCitationFlashRestartsAndExpires` (SessionTests); observed half in §5b |
+| T-50 | PASSING | ParsedDocument.swift, LineCitation.swift | `testBlockLinesAreHalfOpenAndCounted`, `testLineCitationGrammar`, `testRangeNormalisation`, `testResolution`, `testFixtureLineMap` (LineCitationTests) |
+| C-19 | PASSING | LineCitation.swift, DocumentSession.swift, ParsedDocument.swift | as T-49/T-50 |
+| E-31 | PASSING | LineCitation.swift (`lineCitationBlock`) | `testResolution`, `testFixtureLineMap` (LineCitationTests); `testLineCitationSameDocument`, `testLineCitationCrossFile` (SessionTests) |
+
 ## 7. Verdict
 
 ```text
-Spec coverage: 169/169 IDs realized (0 deferred)
-speccheck (mock): speccheck: CONFORMING - 169/169 passing (100.0%), 0 failing, 0 skipped, 0 weak, 0 unverified, 0 untested, 0 uncited; 0 dangling, 0 stale; judge=mock
-speccheck (llm):  speccheck: CONFORMING - 169/169 passing (100.0%), 0 failing, 0 skipped, 0 weak, 0 unverified, 0 untested, 0 uncited; 0 dangling, 0 stale; judge=llm — openai/gpt-4o-mini via OpenRouter, unknown_rate 0.0
+Spec coverage: 173/173 IDs realized (0 deferred)
+speccheck (mock): speccheck: CONFORMING - 173/173 passing (100.0%), 0 failing, 0 skipped, 0 weak, 0 unverified, 0 untested, 0 uncited; 0 dangling, 0 stale; judge=mock
+speccheck (llm):  speccheck: NOT CONFORMING - 165/173 passing (95.4%), 0 failing, 0 skipped, 8 weak, 0 unverified, 0 untested, 0 uncited; 0 dangling, 0 stale; judge=llm (gemini), unknown_rate 0.0213 — the 8 weak rows are T-04, T-07, T-09, T-12, T-34, R-10, R-13, E-19, all pre-existing manual tests, none of them a W8 id; the run before W8 (build/speccheck-llm-gemini, 2026-09-18) was already NOT CONFORMING with 4 weak of the same class, so the delta is judge strictness/endpoint, not this change
 Observed: T-44 build/observed/T-44-sevilla.png (+charcoal, twilight, states; user-report/search-hidden-by-esc.png, hover-chevron.png) — anatomy matches reference/MDV-ORIGINAL-SEVILLA.png; Esc-hide and hover chevron exercised with real input; agent looked, person's look pending
           T-45 measured (testRhythmBandSevillaAndCharcoal, spec bands) — pass;  T-46 measured (centred, .display height) — pass
           T-47 build/observed/T-47-first.png, T-47-second-window.png, T-47-empty-title.png — titles follow each window's file, revert to mdv6; person's look pending
           T-48 build/observed/T-48-stripe-*.png, T-48-third-moved-up.png, …, user-report/bookmark-context-menu.png — stripe, reorder, menu presentation and a real drag reorder exercised; menus also proved in swift test; person's look pending
+          T-49 build/observed/w8-before.png, w8-after-click.png (a real pointer click on the citation), w8-after-citation.png (cross-file: file loaded, scrolled, tinted) — flash seen live; flash target, expiry and the E-31 clamp asserted in swift test, see §5b for what was and was not captured
           T-43 PENDING: no Developer ID identity, notary profile or vX.Y.Z tag on this host (tag gate and chain dry-run proved)
 Readiness: BUILT
 Conformance: VERIFICATION PENDING
