@@ -25,7 +25,9 @@ final class PersistenceTests: XCTestCase {
 
     // MARK: Database (§3.3, I-006, I-007, E-12)
 
-    /// §3.3: `mdv6.db` opens FULLMUTEX with WAL and synchronous NORMAL; the C-03/C-08 tables exist; `meta.schema_version` is 4. I-006.
+    /// §3.3: `mdv6.db` opens FULLMUTEX with WAL and synchronous NORMAL; the C-03/C-08 tables exist **with the pinned
+    /// columns** (`articles`, the FTS5 `articles_fts` with `unicode61 remove_diacritics 2` over `articles`, `bookmarks`,
+    /// `scroll_positions`); `meta.schema_version` is 4. I-006.
     func testOpenCreatesSchemaV4() {
         let d = db()
         XCTAssertTrue(d.isAvailable)
@@ -34,6 +36,16 @@ final class PersistenceTests: XCTestCase {
         XCTAssertEqual(d.pragma("journal_mode"), "wal")
         XCTAssertEqual(d.pragma("synchronous"), "1")                                   // NORMAL
         XCTAssertEqual(Set(d.tableNames()).isSuperset(of: ["articles", "articles_fts", "bookmarks", "scroll_positions", "meta"]), true)
+        // C-03: the articles table and the FTS5 index, column for column
+        XCTAssertEqual(d.columnNames(of: "articles"), ["id", "path", "filename", "content", "indexed_at", "file_mtime", "file_size"])
+        let fts = d.tableSQL("articles_fts") ?? ""
+        XCTAssertTrue(fts.contains("USING fts5("), fts)
+        for clause in ["filename", "content", "path UNINDEXED", "content='articles'", "content_rowid='id'", "tokenize='unicode61 remove_diacritics 2'"] {
+            XCTAssertTrue(fts.contains(clause), "articles_fts lacks \(clause): \(fts)")
+        }
+        // C-08: bookmarks and scroll positions, column for column
+        XCTAssertEqual(d.columnNames(of: "bookmarks"), ["id", "path", "title", "sort_order", "created_at", "block_index", "block_fingerprint"])
+        XCTAssertEqual(d.columnNames(of: "scroll_positions"), ["path", "block_index", "block_fingerprint", "updated_at", "file_mtime"])
         XCTAssertTrue(d.openFlagsIncludeFullMutex)
         XCTAssertTrue(FileManager.default.fileExists(atPath: dir.appendingPathComponent("mdv6.db").path))
     }

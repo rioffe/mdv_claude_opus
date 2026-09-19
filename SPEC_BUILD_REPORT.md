@@ -68,6 +68,48 @@ The first Phase B run of W7 returned 10 `WEAKLY_PASSING` ids (R-07, R-09, K-15, 
 
 Note for the record: speccheck's Swift adapter treats `//` inside a string literal as a comment; test files keep `//` out of literals on lines with braces (`RecordingServer.slashes`).
 
+### 3.1 Re-gated with speccheck 1.8.0 (2026-09-18)
+
+speccheck 1.8.0 (its SPEC v1.8, R-33) sends the judge a heading-declared contract's **section body**, not just its
+heading, so the 17 `### C-nn` contracts of this spec — 0.5–11.2 kB each; `C-18` at 11,179 bytes sits under the
+16,384-byte K-14 cap, no truncation Note — were judged for the first time against their pinned shapes. Same tree,
+same `junit.xml`, same model, 1.6.0 (title only) versus 1.8.0 (title + body), 101 contract edges:
+
+| | 1.6.0 | 1.8.0 |
+| --- | --- | --- |
+| `ASSERTS` | 96 | 82 |
+| `EXECUTES_ONLY` | 4 | 16 |
+| `UNRELATED` | 1 | 3 |
+
+19 edges flipped, 18 of them stable across two 1.8.0 runs; the gate was never at risk (every contract keeps at least
+one `ASSERTS` edge). Reading the 18 against the bodies: eleven are judge false negatives — the test asserts a body
+clause nearly verbatim (`testPromptAwareFences` ↔ C-05's prompt-aware bullet, `testPiecewiseLinearRemap` ↔ C-06.2,
+`testCacheKeyedByURL` ↔ C-07.2 "2048 entries keyed by the URL", `testBookmarkMenuOrderAndEnablement` ↔ C-18.9's
+menu, item for item), clustered on the long bodies (C-06, C-07, C-17, C-18), where `gpt-4o-mini` loses the clause.
+Five were real and are fixed in this commit, in the test and never by weakening a citation:
+
+| Edge | What was wrong | Change |
+| --- | --- | --- |
+| C-03, C-08 ← `testOpenCreatesSchemaV4` | asserted the tables *exist*, not their pinned columns | asserts `articles`, `bookmarks`, `scroll_positions` column for column and the FTS5 definition (`content='articles'`, `content_rowid='id'`, `unicode61 remove_diacritics 2`); two introspection helpers `Database.columnNames(of:)` / `tableSQL(_:)` added |
+| C-04 ← `testInspectorContents` | asserted persistence through `AppModel`, never the contract's key names | asserts `mdv6_inspector_visible` / `mdv6_inspector_width` in the `UserDefaults` suite, as the contract's types |
+| C-02 ← `testBlockKindHelpers` | docstring promised "math fence detection"; `isMathFence` was never called | rule-3 assertions added (`$$` first non-space, no second `$$` on the line) |
+| C-18.10 ← `testOwnParagraphEmission` | C-18.10 delegates display math to C-07.1, which the test already cites | citation removed |
+| C-17 ← `testInkBounds` | C-17 only *names* the §7.1 ink metric; the test covers T-46's centring apparatus | re-pointed to T-46 |
+
+After the change (`swift test --parallel --xunit-output junit.xml` → 163 tests, 0 failures):
+
+```text
+speccheck: CONFORMING - 169/169 passing (100.0%), 0 failing, 0 skipped, 0 weak, 0 unverified, 0 untested, 0 uncited; 0 dangling, 0 stale; judge=mock
+speccheck: CONFORMING - 169/169 passing (100.0%), 0 failing, 0 skipped, 0 weak, 0 unverified, 0 untested, 0 uncited; 0 dangling, 0 stale; judge=llm
+```
+
+Phase B: `openai/gpt-4o-mini` via OpenRouter, 99 contract edges (82 `ASSERTS`, 15 `EXECUTES_ONLY`, 2 `UNRELATED`),
+`unknown_rate 0.0`, `judge_prompt_sha256` `fc7dc32b…bfad00` (the 1.8.0 prompt; the `21ec7849…` runs above were under
+the 1.6.0 prompt). C-03 and C-04 now judge `ASSERTS`; C-08 and C-02 still judge `EXECUTES_ONLY` on the same run
+although the new assertions are the contract's own columns and rule — recorded, not chased. `testIdleMathCPU` (K-15)
+failed once in this session at p95 = 8 % while the build's own processes were still winding down, and passed on the
+immediate re-run and on the final full run; K-15 is defined on an otherwise idle host.
+
 ## 4. Artifact cross-check (§3.2 of the skill)
 
 | Check | Evidence |

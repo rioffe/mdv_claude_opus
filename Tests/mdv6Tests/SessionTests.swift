@@ -604,6 +604,10 @@ final class SessionTests: XCTestCase {
         XCTAssertEqual(toc.filter { $0.text.localizedCaseInsensitiveContains("tw") }.map(\.text), ["Two"], "the filter rule the pane applies")
         model.preferences.inspectorVisible = true
         model.preferences.inspectorWidth = 300
+        // C-04: stored under the contract's own key names, as the contract's types
+        let stored = UserDefaults(suiteName: suite)!
+        XCTAssertEqual(stored.object(forKey: "mdv6_inspector_visible") as? Bool, true)
+        XCTAssertEqual(stored.object(forKey: "mdv6_inspector_width") as? Double, 300)
         let relaunched = AppModel.bootstrap(supportDir: dir, defaultsSuite: suite, fileSystem: fs)
         XCTAssertTrue(relaunched.preferences.inspectorVisible); XCTAssertEqual(relaunched.preferences.inspectorWidth, 300)
         model.preferences.inspectorWidth = 900

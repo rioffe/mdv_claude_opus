@@ -76,11 +76,17 @@ final class SplitTests: XCTestCase {
         XCTAssertNotEqual(ParsedDocument(raw: "a"), ParsedDocument(raw: "b"))
     }
 
-    /// C-02 helpers used by find (R-24, E-17): fence, math fence, GFM table detection.
+    /// R-24's block-kind predicates (E-17), each defined by C-02: a fence opens on ` ``` `/`~~~` as the first non-space
+    /// characters (rule 2); a math fence opens on a `$$` line with no second `$$` on it (rule 3); a GFM table is a `|` line
+    /// over a `-`/`:`/`|` separator line.
     func testBlockKindHelpers() {
         XCTAssertTrue(ParsedDocument.isFence("```\nx\n```"))
         XCTAssertTrue(ParsedDocument.isFence("~~~py\nx"))
         XCTAssertFalse(ParsedDocument.isFence("text ```"))
+        XCTAssertTrue(ParsedDocument.isMathFence("$$\nx = 1\n$$"))
+        XCTAssertTrue(ParsedDocument.isMathFence("  $$\nx\n$$"), "leading spaces allowed before the opener")
+        XCTAssertFalse(ParsedDocument.isMathFence("$$x = 1$$"), "a second $$ on the opening line is inline display math, not a fence")
+        XCTAssertFalse(ParsedDocument.isMathFence("text $$\nx\n$$"), "$$ must be the first non-space characters")
         XCTAssertTrue(ParsedDocument.isGFMTable("| a | b |\n|---|:--:|\n| 1 | 2 |"))
         XCTAssertFalse(ParsedDocument.isGFMTable("| a | b |\nno separator"))
         XCTAssertFalse(ParsedDocument.isGFMTable("a | b"))

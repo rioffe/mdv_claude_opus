@@ -295,6 +295,16 @@ public final class Database {
         query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name", []) { String(cString: sqlite3_column_text($0, 0)) }
     }
 
+    /// The declared columns of `table`, in declaration order (C-03 / C-08 pinned shapes; introspection only).
+    public func columnNames(of table: String) -> [String] {
+        query("SELECT name FROM pragma_table_info(?) ORDER BY cid", [.text(table)]) { String(cString: sqlite3_column_text($0, 0)) }
+    }
+
+    /// The `CREATE` statement SQLite recorded for `table` (the FTS5 definition of C-03), or nil when absent.
+    public func tableSQL(_ table: String) -> String? {
+        query("SELECT sql FROM sqlite_master WHERE name = ?", [.text(table)]) { sqlite3_column_text($0, 0).map { String(cString: $0) } ?? "" }.first
+    }
+
     // MARK: SQLite plumbing
 
     enum Value { case text(String), int(Int), int64(Int64) }

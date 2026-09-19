@@ -64,7 +64,7 @@ final class MathContractTests: XCTestCase {
     }
 
     /// C-07.1: an own-paragraph `$$` (one line or the fence form) is emitted as its own paragraph with blank lines
-    /// and its indentation preserved. C-18.10, T-46.
+    /// and its indentation preserved (the emission half of T-46; the rhythm half is I-014's).
     func testOwnParagraphEmission() {
         let one = MathMarkdown.rewrite("$$r=1$$", fontSize: 16, headingSizeEms: [], color: .black)
         let fence = MathMarkdown.rewrite("$$\nr=1\n$$", fontSize: 16, headingSizeEms: [], color: .black)

@@ -88,7 +88,8 @@ final class MetricsTests: XCTestCase {
         XCTAssertEqual(RenderMetrics.perBlockTolerance, 2)
     }
 
-    /// C-17 / T-46: the ink bounding box of a raster against the page colour; nil when nothing is inked.
+    /// T-46's centring apparatus: the ink bounding box of a raster against the page colour (nil when nothing is inked)
+    /// and its horizontal offset from the column centre.
     func testInkBounds() {
         let page = RGBA(r: 255, g: 255, b: 255)
         let img = bitmap(20, 10) { x, y in (x >= 5 && x < 15 && y >= 3 && y < 6) ? (0, 0, 0, 255) : (255, 255, 255, 255) }
