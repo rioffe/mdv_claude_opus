@@ -112,7 +112,7 @@ final class MiscContractTests: XCTestCase {
 
     // MARK: C-05
 
-    /// C-05, K-05, R-38: language resolution — first word lower-cased, direct names, aliases; anything else plain. T-06, T-37.
+    /// C-05, K-05, R-38, R-43: language resolution — first word lower-cased, direct names, aliases; anything else plain. T-06, T-37, T-51.
     func testLanguageResolution() {
         XCTAssertEqual(CodeLanguage.resolve(infoString: "Swift"), .swift)
         XCTAssertEqual(CodeLanguage.resolve(infoString: "js {highlight}"), .javascript)
@@ -137,12 +137,22 @@ final class MiscContractTests: XCTestCase {
         for direct in ["c", "go", "rust", "bash", "javascript", "yaml", "toml", "python", "ruby"] {
             XCTAssertEqual(CodeLanguage.resolve(infoString: direct)?.rawValue, direct)
         }
+        // R-43: the added grammars, and the fence words that resolve to them (`metal` is the C++ grammar, D-45).
+        for direct in ["cpp", "json", "lua", "opencl", "perl", "markdown"] {
+            XCTAssertEqual(CodeLanguage.resolve(infoString: direct)?.rawValue, direct)
+        }
+        for alias in ["c++", "cplusplus", "cc", "cxx", "cp", "hpp", "hxx", "hh", "metal", "msl"] {
+            XCTAssertEqual(CodeLanguage.resolve(infoString: alias), .cpp, alias)
+        }
+        for alias in ["cl", "opencl-c"] { XCTAssertEqual(CodeLanguage.resolve(infoString: alias), .opencl, alias) }
+        for alias in ["pl", "perl5"] { XCTAssertEqual(CodeLanguage.resolve(infoString: alias), .perl, alias) }
+        for alias in ["md", "gfm"] { XCTAssertEqual(CodeLanguage.resolve(infoString: alias), .markdown, alias) }
         XCTAssertNil(CodeLanguage.resolve(infoString: "brainfuck"))
         XCTAssertNil(CodeLanguage.resolve(infoString: "fish"))
         XCTAssertNil(CodeLanguage.resolve(infoString: "console"))
         XCTAssertNil(CodeLanguage.resolve(infoString: nil))
         XCTAssertNil(CodeLanguage.resolve(infoString: ""))
-        XCTAssertEqual(CodeLanguage.allCases.count, 11)
+        XCTAssertEqual(CodeLanguage.allCases.count, 17)
     }
 
     /// C-05, R-08: the prompt-aware set is a separate test on the raw first word (`fish`/`console` yes, `shell-session`

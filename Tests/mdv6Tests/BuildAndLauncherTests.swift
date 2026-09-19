@@ -34,11 +34,14 @@ final class BuildAndLauncherTests: XCTestCase {
         for f in ["Contents/MacOS/mdv6", "Contents/Info.plist", "Contents/Resources/AppIcon.icns", "Contents/Resources/mdv6",
                   "Contents/Resources/Help.md", "Contents/Resources/mathFonts.bundle/latinmodern-math.otf", "Contents/Resources/mathFonts.bundle/latinmodern-math.plist",
                   "Contents/Resources/Alegreya-Regular.otf", "Contents/Resources/Besley-SemiBold.otf", "Contents/Resources/OpenDyslexic-Bold.otf",
-                  "Contents/Resources/swift-highlights.scm", "Contents/Resources/sql-highlights.scm"] {
+                  "Contents/Resources/swift-highlights.scm", "Contents/Resources/sql-highlights.scm",
+                  "Contents/Resources/cpp-highlights.scm", "Contents/Resources/markdown-highlights.scm",
+                  "Contents/Resources/markdown-inline-highlights.scm"] {
             XCTAssertTrue(FileManager.default.fileExists(atPath: app.appendingPathComponent(f).path), f)
         }
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: app.path), ["Contents"])
-        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: app.appendingPathComponent("Contents/Resources").path).filter { $0.hasSuffix("-highlights.scm") }.count, 11)
+        // K-05, R-38, R-43: every grammar's query ships — 17 fence languages, markdown contributing two.
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: app.appendingPathComponent("Contents/Resources").path).filter { $0.hasSuffix("-highlights.scm") }.count, 18)
         let plist = NSDictionary(contentsOf: app.appendingPathComponent("Contents/Info.plist"))!
         XCTAssertEqual(plist["CFBundleIdentifier"] as? String, "com.mdv6.app")
         XCTAssertEqual(plist["CFBundleShortVersionString"] as? String, "1.0.0"); XCTAssertEqual(plist["CFBundleVersion"] as? String, "1")

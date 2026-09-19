@@ -38,7 +38,7 @@ mdv6 reads Markdown the way a good document viewer reads a PDF: typographically 
 
 - ` ```mermaid ` fences render natively (flowcharts, state, sequence, class, ER and XY charts). Hover a diagram for its style menu (Document, Light, Dark, Tokyo Night, Catppuccin), **Show Mermaid source**, **Export diagram as PNG** and copy; pinch to zoom. Diagram types the renderer lacks show their source with a note.
 - LaTeX between `$…$` (inline) and `$$…$$` (display) is typeset natively in paragraphs, headings, lists, quotes and tables; display math on its own line is centred and offers **Copy LaTeX**. LaTeX the typesetter rejects is shown as source with the parser's message.
-- Fenced code is highlighted for C, Go, Rust, Bash, JavaScript, YAML, TOML, Python, Ruby, Swift and SQL; hover a block to wrap long lines or copy it, and right-click a shell block for **Copy Without Prompts**.
+- Fenced code is highlighted for C, C++ (and Metal), Go, Rust, Bash, JavaScript, YAML, TOML, Python, Ruby, Swift, SQL, OpenCL, JSON, Lua, Perl and Markdown; hover a block to wrap long lines or copy it, and right-click a shell block for **Copy Without Prompts**.
 
 ## Editor integration
 

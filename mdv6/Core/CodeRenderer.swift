@@ -1,5 +1,5 @@
-// CodeRenderer — C-05: tree-sitter highlighting for the K-05 languages (+ swift/sql, R-38), plain monospace for
-// everything else, never an error (R-08); result cache of 256 entries.
+// CodeRenderer — C-05: tree-sitter highlighting for the K-05 languages (+ swift/sql, R-38; + cpp/json/lua/
+// opencl/perl, R-43), plain monospace for everything else, never an error (R-08); result cache of 256 entries.
 import Foundation
 import AppKit
 import SwiftUI
@@ -32,6 +32,8 @@ public final class CodeRenderer {
     struct Grammar { let language: Language; let query: Query? }
 
     private var grammars: [CodeLanguage: Grammar] = [:]
+    /// C-05: the embedded grammar of a language that has one (markdown's inline grammar), loaded once.
+    private var embeddedGrammars: [CodeLanguage: Grammar] = [:]
     /// C-05: a language whose query failed to compile falls back to plain for the rest of the session.
     public private(set) var plainForSession: Set<CodeLanguage> = []
     private var cache: [CacheKey: AttributedString] = [:]
@@ -56,7 +58,41 @@ public final class CodeRenderer {
         case .ruby: return tree_sitter_ruby()
         case .swift: return tree_sitter_swift()
         case .sql: return tree_sitter_sql()
+        case .cpp: return tree_sitter_cpp()
+        case .json: return tree_sitter_json()
+        case .lua: return tree_sitter_lua()
+        case .opencl: return tree_sitter_opencl()
+        case .perl: return tree_sitter_perl()
+        case .markdown: return tree_sitter_markdown()
         }
+    }
+
+    /// C-05: markdown is the one language highlighted by two grammars — the block grammar above, then
+    /// `tree-sitter-markdown-inline` over each `(inline)` span the block grammar leaves whole. Every other
+    /// language has no embedded grammar.
+    static func embeddedTSLanguage(_ lang: CodeLanguage) -> OpaquePointer? {
+        switch lang {
+        case .markdown: return tree_sitter_markdown_inline()
+        default: return nil
+        }
+    }
+
+    /// The embedded grammar (language + compiled query) for a language, loaded once. Its query failing to
+    /// compile is not a `plainForSession` case: the block grammar's captures still stand.
+    func embeddedGrammar(for lang: CodeLanguage) -> Grammar? {
+        lock.lock(); defer { lock.unlock() }
+        if let g = embeddedGrammars[lang] { return g }
+        guard let ts = CodeRenderer.embeddedTSLanguage(lang) else { return nil }
+        let name = "\(lang.rawValue)-inline-highlights.scm"
+        let language = Language(language: ts)
+        var query: Query? = nil
+        if let url = Resources.url(file: name, subdirectory: "Queries"),
+           let data = try? Data(contentsOf: url), let q = try? Query(language: language, data: data) {
+            query = q
+        }
+        let g = Grammar(language: language, query: query)
+        embeddedGrammars[lang] = g
+        return g
     }
 
     /// The grammar (language + compiled `highlights.scm`) for a language, loaded once.
@@ -99,23 +135,20 @@ public final class CodeRenderer {
             if (try? parser.setLanguage(g.language)) != nil {
                 PipelineProbe.enter("treesitter")
                 if let tree = parser.parse(code) {
-                    let cursor = query.execute(in: tree)
-                    let context = Predicate.Context(string: code)
                     var assigned = Set<NSRange>()                              // first capture of a node wins (tree-sitter convention)
-                    while let match = cursor.next() {
-                        guard match.allowed(in: context) else { continue }        // #eq? / #match? / #any-of? predicates
-                        for capture in match.captures {
-                            guard let name = capture.name, palette.knows(capture: name),   // `@spell`-style captures carry no colour
-                                  !assigned.contains(capture.range), let r = Range(capture.range, in: code),
-                                  let lo = AttributedString.Index(r.lowerBound, within: out),
-                                  let hi = AttributedString.Index(r.upperBound, within: out), lo < hi else { continue }
-                            assigned.insert(capture.range)
-                            let color = palette.color(forCapture: name)
-                            out[lo..<hi].foregroundColor = color.color
-                            out[lo..<hi][CaptureColorKey.self] = color.hex
-                            if palette.isItalic(capture: name) {
-                                out[lo..<hi].font = Font(italicFont)
-                                out[lo..<hi][FontKey.self] = FontSpec(italicFont)
+                    apply(query, tree: tree, code: code, source: code, offset: 0,
+                          to: &out, palette: palette, italicFont: italicFont, assigned: &assigned)
+                    // C-05: markdown — re-parse each `(inline)` span with the inline grammar and colour it too,
+                    // after the block captures so an inline capture wins on its own range.
+                    if let embedded = embeddedGrammar(for: lang), let eQuery = embedded.query, let root = tree.rootNode {
+                        let inlineParser = Parser()
+                        if (try? inlineParser.setLanguage(embedded.language)) != nil {
+                            for node in CodeRenderer.nodes(named: "inline", in: root) {
+                                guard let span = Range(node.range, in: code) else { continue }
+                                let source = String(code[span])
+                                guard let subTree = inlineParser.parse(source) else { continue }
+                                apply(eQuery, tree: subTree, code: code, source: source, offset: node.range.location,
+                                      to: &out, palette: palette, italicFont: italicFont, assigned: &assigned)
                             }
                         }
                     }
@@ -127,5 +160,45 @@ public final class CodeRenderer {
         cache[key] = out
         lock.unlock()
         return out
+    }
+
+    /// C-05: colour one query's captures. `source` is the text the query ran on (the predicate context);
+    /// `code` is the whole block, and `offset` the position of `source` in it, so an embedded grammar's
+    /// captures land on the right characters.
+    private func apply(_ query: Query, tree: MutableTree, code: String, source: String, offset: Int,
+                       to out: inout AttributedString, palette: CodePalette, italicFont: NSFont,
+                       assigned: inout Set<NSRange>) {
+        let cursor = query.execute(in: tree)
+        let context = Predicate.Context(string: source)
+        while let match = cursor.next() {
+            guard match.allowed(in: context) else { continue }        // #eq? / #match? / #any-of? predicates
+            for capture in match.captures {
+                var range = capture.range
+                range.location += offset
+                guard let name = capture.name, palette.knows(capture: name),   // `@spell`-style captures carry no colour
+                      !assigned.contains(range), let r = Range(range, in: code),
+                      let lo = AttributedString.Index(r.lowerBound, within: out),
+                      let hi = AttributedString.Index(r.upperBound, within: out), lo < hi else { continue }
+                assigned.insert(range)
+                let color = palette.color(forCapture: name)
+                out[lo..<hi].foregroundColor = color.color
+                out[lo..<hi][CaptureColorKey.self] = color.hex
+                if palette.isItalic(capture: name) {
+                    out[lo..<hi].font = Font(italicFont)
+                    out[lo..<hi][FontKey.self] = FontSpec(italicFont)
+                }
+            }
+        }
+    }
+
+    /// Every node of a type in a tree, depth first.
+    static func nodes(named type: String, in node: Node) -> [Node] {
+        var found: [Node] = []
+        func walk(_ node: Node) {
+            if node.nodeType == type { found.append(node) }
+            for i in 0..<node.childCount { if let child = node.child(at: i) { walk(child) } }
+        }
+        walk(node)
+        return found
     }
 }

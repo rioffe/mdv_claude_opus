@@ -16,7 +16,7 @@ let package = Package(
         .package(path: "Vendor/SwiftMath"),
     ],
     targets: [
-        // The eleven vendored tree-sitter grammars (K-05, R-38); see mdv6/Grammars/README.md.
+        // The eighteen vendored tree-sitter grammars (K-05, R-38, R-43); see mdv6/Grammars/README.md.
         .target(
             name: "CGrammars",
             path: "mdv6/Grammars",
@@ -24,6 +24,8 @@ let package = Package(
                 "README.md",
                 "c/LICENSE", "go/LICENSE", "rust/LICENSE", "bash/LICENSE", "javascript/LICENSE", "yaml/LICENSE",
                 "toml/LICENSE", "python/LICENSE", "ruby/LICENSE", "swift/LICENSE", "sql/LICENSE",
+                "cpp/LICENSE", "json/LICENSE", "lua/LICENSE", "opencl/LICENSE", "perl/LICENSE",
+                "markdown/LICENSE", "markdown-inline/LICENSE",
                 "yaml/src/schema.core.c",   // #included by yaml/src/scanner.c
             ],
             publicHeadersPath: "include",

@@ -1,8 +1,9 @@
-// CodeLanguage — C-05 language resolution, the prompt-aware fence set and Copy Without Prompts (R-08, K-05, R-38).
+// CodeLanguage — C-05 language resolution, the prompt-aware fence set and Copy Without Prompts (R-08, K-05, R-38, R-43).
 import Foundation
 
 public enum CodeLanguage: String, CaseIterable, Sendable {
     case c, go, rust, bash, javascript, yaml, toml, python, ruby, swift, sql
+    case cpp, json, lua, opencl, perl, markdown
 
     static let aliases: [String: CodeLanguage] = [
         "js": .javascript, "jsx": .javascript, "javascriptreact": .javascript, "node": .javascript,
@@ -11,6 +12,14 @@ public enum CodeLanguage: String, CaseIterable, Sendable {
         "rb": .ruby, "yml": .yaml, "rs": .rust, "golang": .go,
         "h": .c, "objective-c": .c, "objc": .c,
         "sqlite": .sql, "postgresql": .sql, "postgres": .sql, "mysql": .sql, "plsql": .sql, "tsql": .sql,
+        // R-43: C++ spellings, and Metal — the shading language is C++14-based and has no licensed
+        // grammar of its own, so a `metal` fence resolves to the C++ grammar and query (D-45).
+        "c++": .cpp, "cplusplus": .cpp, "cc": .cpp, "cxx": .cpp, "cp": .cpp,
+        "hpp": .cpp, "hxx": .cpp, "hh": .cpp, "metal": .cpp, "msl": .cpp,
+        "cl": .opencl, "opencl-c": .opencl,
+        "pl": .perl, "perl5": .perl,
+        // R-43: a `markdown` fence shows Markdown source; `md` and `gfm` are its spellings.
+        "md": .markdown, "gfm": .markdown,
     ]
 
     /// C-05: lower-case the info string, keep its first word; direct names, then aliases; anything else → nil (plain).

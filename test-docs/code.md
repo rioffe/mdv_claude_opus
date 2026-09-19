@@ -1,6 +1,6 @@
 # Code highlighting
 
-Nine languages (K-05), Swift and SQL (R-38), an unknown fence, and prompt-aware fences (R-08, T-06, T-37).
+Nine languages (K-05), Swift and SQL (R-38), C++, Metal, OpenCL, JSON, Lua, Perl and Markdown (R-43), an unknown fence, and prompt-aware fences (R-08, T-06, T-37, T-51).
 
 ```c
 #include <stdio.h>
@@ -68,6 +68,68 @@ SELECT u.name, COUNT(o.id) FROM users u JOIN orders o ON o.user_id = u.id WHERE 
 ```postgresql
 -- the same block, tagged postgresql, highlights identically to sql
 SELECT u.name, COUNT(o.id) FROM users u JOIN orders o ON o.user_id = u.id WHERE u.name = 'alice' AND o.total > 100;
+```
+
+```cpp
+// a counter
+#include <cstdint>
+struct Counter {
+    std::uint32_t n = 42;
+    const char *name = "counter";
+    int bump(int by) { return n + by; }
+};
+```
+
+```metal
+#include <metal_stdlib>
+using namespace metal;
+
+// scales in place
+kernel void scale(device float4 *v [[buffer(0)]], uint i [[thread_position_in_grid]]) {
+    v[i] = v[i] * 2.0f;
+}
+```
+
+```opencl
+/* vector add */
+__kernel void vec_add(__global const float *a, __global float *c, const int n) {
+    int i = get_global_id(0);
+    if (i < n) c[i] = a[i] + 1.5f;
+}
+```
+
+```json
+{ "name": "mdv6", "count": 42, "ok": true }
+```
+
+```lua
+-- counts to n
+local function sum(n)
+    local t = 0
+    for i = 1, n do t = t + i end
+    return t, "done"
+end
+```
+
+```perl
+#!/usr/bin/perl
+use strict;
+my $count = 42;          # a comment
+sub greet {
+    my ($name) = @_;
+    print "hello, $name\n";
+    return $count > 10 ? "big" : 'small';
+}
+```
+
+```markdown
+# A heading
+
+A paragraph with **bold**, _italic_, `code span` and a [link](https://example.com).
+
+- a list item
+
+> a quote
 ```
 
 ```brainfuck
