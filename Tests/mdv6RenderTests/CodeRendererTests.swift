@@ -181,6 +181,8 @@ final class CodeRendererTests: XCTestCase {
 
         A paragraph with **bold**, _italic_, `code span` and a [link](https://example.com).
 
+        Ünïcödé prefix, then **böld**, `cöde` and [lïnk](https://example.com/ü).
+
         - item one
 
         > a quote
@@ -192,6 +194,10 @@ final class CodeRendererTests: XCTestCase {
         XCTAssertNotEqual(color(of: "code span", in: a), plain, "code span")
         XCTAssertNotEqual(color(of: "link", in: a), plain, "link label")
         XCTAssertNotEqual(color(of: "https://example.com", in: a), plain, "link destination")
+        // the inline pass offsets its captures into the block: multi-byte characters before a span must not shift them
+        XCTAssertNotEqual(color(of: "böld", in: a), plain, "strong emphasis after non-ASCII")
+        XCTAssertNotEqual(color(of: "cöde", in: a), plain, "code span after non-ASCII")
+        XCTAssertNotEqual(color(of: "lïnk", in: a), plain, "link label after non-ASCII")
         XCTAssertGreaterThanOrEqual(colors(a).count, 4)
         for hint in ["md", "gfm"] {
             XCTAssertEqual(CodeRenderer.shared.render(code: md, languageHint: hint, theme: .highContrast, zoom: 1), a, hint)
