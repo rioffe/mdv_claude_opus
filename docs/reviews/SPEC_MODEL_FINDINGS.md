@@ -31,6 +31,38 @@ Numbering continues the spec's review sequence: the last applied review finding 
 
 ---
 
+## The verification pass (what "agrees with the code" cost)
+
+Each resolution was checked against the as-built source rather than assumed, and the check found
+four places where the *first draft* of a resolution did not match it. All four were corrected in the
+same v0.13.1 change, so the table above holds:
+
+* **C-10's dash runs.** The first draft stated only "`---` → `—`". `SmartTypography` emits an em dash
+  for a run of **exactly three** and leaves a run of **four or more** untouched; the spec now says so
+  and the model's `resolveRun` reproduces it (`a ---- b` unchanged).
+* **R-24's table test.** `ParsedDocument.isGFMTable` requires the separator row to contain at least
+  one `-`; the first draft's citation of R-24 did not. R-24 (and the model's `isGfmTableBlock`) now
+  require it, so a `|:|` separator row is not a table in either.
+* **§3.1's `RELOADING` cell.** The first draft said a further event leaves the state `RELOADING`
+  again. `swap` sets `RELOADING` and completes into `VIEWING` within the same synchronous call, so
+  the cell now reads "a readable read replaces the in-flight reload and completes into `VIEWING`, an
+  unreadable one is ignored and the state is unchanged". Because those two readings differ, the
+  event itself now carries readability (`LifeEvent.fileChangedOnDisk (readable : Bool)`) — the same
+  device §3.1's load path already used for `unreadable`.
+* **A model bug the check exposed.** `rewStep`'s reversed accumulator put a multi-character run
+  replacement *before* the character that ended it (`a....b` yielded `a.…b` where the code yields
+  `a….b`). Fixed, with `f144_quote_direction_pinned` and the row theorems re-verified.
+
+One residual divergence was found and **left alone**, because it is not one of F-139…F-147 and
+closing it would change behaviour rather than wording: E-17 tints "a `$$` math fence (C-02 rule 3)"
+as a whole, but `ParsedDocument.isMathFence` additionally requires the block to span more than one
+line, so a one-line block that is exactly `$$` (opened by the splitter as an unclosed math fence)
+is a math-fence block per C-02 and is *not* tinted per E-17. Either sentence — a clause in E-17, or
+dropping the multi-line requirement in `isMathFence` — closes it; it needs a decision, not a
+transcription.
+
+---
+
 ## F-139 · G-2 · P1 — the CSS colour map was named but not pinned
 
 **Was.** C-06.1 rule 3 said *"map these CSS colour names … to hex"* and enumerated 46 names (44

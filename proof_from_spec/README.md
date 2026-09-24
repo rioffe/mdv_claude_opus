@@ -14,7 +14,7 @@ program at all. The bridge has three legs and this project builds only the middl
 | leg | claims | evidence |
 | --- | --- | --- |
 | **A. Transcription** | the model is a faithful transcription of the spec's normative tables | **manual** — the correspondence table at the head of `Mdv6Spec/Mdv6/Model.lean`, anchor by anchor; made *checkable* (not proven) by the row theorems in `section Rows` |
-| **B. Lean (this project)** | the model satisfies the claims the spec makes about itself — for all inputs | `lake build` — 597 kernel-checked declarations |
+| **B. Lean (this project)** | the model satisfies the claims the spec makes about itself — for all inputs | `lake build` — 598 kernel-checked declarations |
 | **C. Empirical** | the *system* the spec describes behaves as specified | **does not exist** — no implementation; the spec's §9 tests are *planned*, never run |
 
 A green `lake build` here means the spec is internally consistent, total over the input space it
@@ -55,7 +55,7 @@ proof_from_spec/
   60-cluster truncation, C-07.1's scan) are carried by `Prop`-valued pins that the invariant
   theorems take as hypotheses: the hypotheses are the spec, not the model. The correspondence table
   at the head of the file is leg A.
-* **`Theorems.lean` — the proof.** 203 declarations in six sections: `Rows` (transcription, one
+* **`Theorems.lean` — the proof.** 204 declarations in six sections: `Rows` (transcription, one
   theorem per spec row — see the tautology rule below), `Invariants` (the claims quantified over
   the whole input space: the CLI's closed exit set and its diagnostics contracts, §3.1's closed
   state set, I-001's environment independence, I-004's determinism, the K-04/R-11/C-04/K-14/C-07.1

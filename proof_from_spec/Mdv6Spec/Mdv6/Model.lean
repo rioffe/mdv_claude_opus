@@ -299,7 +299,8 @@ def optIsAlnum : Option Char → Bool
 source character before the run and the character that ends it (`none` at the end of
 a run of text).
 
-* a run of three or more dashes is an em dash;
+* a run of exactly three dashes is an em dash, and a run of four or more is left
+  verbatim;
 * a run of exactly two dashes is an en dash when both neighbours are letters or
   digits, an em dash when both neighbours are spaces (the spec's ` -- ` rule, whose
   spaces are already in the output), and is otherwise left verbatim — so CLI flags
@@ -309,12 +310,12 @@ a run of text).
 def resolveRun (c : Char) (n : Nat) (before after : Option Char) : List Char :=
   if n == 0 then []
   else if c == '-' then
-    (if 3 ≤ n then ['—']
+    (if n == 3 then ['—']
      else if n == 2 then
        (if optIsAlnum before && optIsAlnum after then ['–']
         else if before = some ' ' && after = some ' ' then ['—']
         else ['-', '-'])
-     else ['-'])
+     else List.replicate n '-')
   else
     (if 3 ≤ n then '…' :: List.replicate (n - 3) '.' else List.replicate n '.')
 
@@ -338,7 +339,7 @@ def rewStep (st : RewState) (c : Char) : RewState :=
       else if c == '\'' then (if quoteOpens prevNow then ['‘'] else ['’'])
       else [c]
     { st with
-      out := emitted ++ flushed ++ st.out
+      out := emitted.reverse ++ flushed.reverse ++ st.out
       pending := 0
       pendingChar := '-'
       prevSrc := some c
@@ -426,12 +427,14 @@ def opensMathFence (line : String) : Bool :=
 /-- C-02 rule 3: a math fence closes at the next line containing `$$`. -/
 def closesMathFence (line : String) : Bool := hasSub line "$$"
 
-/-- R-24's GFM table: first line contains `|`, second consists only of `-`, `:`,
-`|`, space. -/
+/-- R-24's GFM table: first line contains `|`; the second line, trimmed, is non-empty,
+contains at least one `-`, and consists only of `-`, `:`, `|`, space — the test the
+as-built `ParsedDocument.isGFMTable` implements. -/
 def isGfmTableBlock (b : String) : Bool :=
   match b.splitOn "\n" with
   | l1 :: l2 :: _ =>
-      hasSub l1 "|" && (!l2.isEmpty && l2.toList.all (fun c => c == '-' || c == ':' || c == '|' || isWs c))
+      hasSub l1 "|" && (!l2.isEmpty && hasSub l2 "-" &&
+        l2.toList.all (fun c => c == '-' || c == ':' || c == '|' || isWs c))
   | _ => false
 
 /-- C-02: a block whose first line opens a fence. -/
@@ -744,14 +747,17 @@ inductive DocState where
   | empty | loading | viewing | reloading | closed
   deriving DecidableEq, Repr
 
-/-- §3.1's events. -/
+/-- §3.1's events. `fileChangedOnDisk` carries whether the read that followed it was
+readable, because §3.1's `VIEWING` and `RELOADING` rows give the two readings different
+outcomes: a readable read enters (or completes) a reload, an unreadable one leaves the
+state unchanged (E-21's transient/deleted cases). -/
 inductive LifeEvent where
   | launchEmptyHistory
   | launchWithHistory
   | openRoute
   | loadOk
   | loadUnreadable (priorDoc : Bool)
-  | fileChangedOnDisk
+  | fileChangedOnDisk (readable : Bool)
   | pathDeleted
   | transientReadRejected
   | deleteDisplayedRow (otherRowsRemain : Bool)
@@ -1178,14 +1184,16 @@ def lifecycle : DocState → LifeEvent → Option DocState
   | .loading, .loadUnreadable false => some .empty
   | .loading, .windowClose => some .closed
   | .viewing, .openRoute => some .loading
-  | .viewing, .fileChangedOnDisk => some .reloading
+  | .viewing, .fileChangedOnDisk true => some .reloading
+  | .viewing, .fileChangedOnDisk false => some .viewing
   | .viewing, .pathDeleted => some .viewing
   | .viewing, .transientReadRejected => some .viewing
   | .viewing, .deleteDisplayedRow true => some .loading
   | .viewing, .deleteDisplayedRow false => some .empty
   | .viewing, .windowClose => some .closed
   | .reloading, .loadOk => some .viewing
-  | .reloading, .fileChangedOnDisk => some .reloading
+  | .reloading, .fileChangedOnDisk true => some .viewing
+  | .reloading, .fileChangedOnDisk false => some .reloading
   | .reloading, .windowClose => some .closed
   | _, _ => none
 
@@ -1206,13 +1214,13 @@ def lifeReachable : DocState → LifeEvent → Bool
   | .loading, .loadUnreadable _ => true
   | .loading, .windowClose => true
   | .viewing, .openRoute => true
-  | .viewing, .fileChangedOnDisk => true
+  | .viewing, .fileChangedOnDisk _ => true
   | .viewing, .pathDeleted => true
   | .viewing, .transientReadRejected => true
   | .viewing, .deleteDisplayedRow _ => true
   | .viewing, .windowClose => true
   | .reloading, .loadOk => true
-  | .reloading, .fileChangedOnDisk => true
+  | .reloading, .fileChangedOnDisk _ => true
   | .reloading, .windowClose => true
   | _, _ => false
 
@@ -1505,7 +1513,8 @@ def docStates : List DocState := [.empty, .loading, .viewing, .reloading, .close
 values). -/
 def lifeEvents : List LifeEvent :=
   [ .launchEmptyHistory, .launchWithHistory, .openRoute, .loadOk, .loadUnreadable true
-  , .loadUnreadable false, .fileChangedOnDisk, .pathDeleted, .transientReadRejected
+  , .loadUnreadable false, .fileChangedOnDisk true, .fileChangedOnDisk false, .pathDeleted
+  , .transientReadRejected
   , .deleteDisplayedRow true, .deleteDisplayedRow false, .windowClose ]
 
 /-- K-14's seven ceiling kinds, enumerated. -/

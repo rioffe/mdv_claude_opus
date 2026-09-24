@@ -155,9 +155,20 @@ enters `EMPTY`. -/
 theorem life_load_unreadable_noPrior :
     outcome (.life .loading (.loadUnreadable false)) = some (.state .empty) := by native_decide
 
-/-- **§3.1, R-05** (T-29): a change on disk moves `VIEWING` to `RELOADING`. -/
+/-- **§3.1, R-05, E-21** (T-29): a change on disk with a readable read moves `VIEWING` to
+`RELOADING`, while an unreadable (or transiently empty) read leaves it in `VIEWING`. -/
 theorem life_file_changed :
-    outcome (.life .viewing .fileChangedOnDisk) = some (.state .reloading) := by native_decide
+    outcome (.life .viewing (.fileChangedOnDisk true)) = some (.state .reloading) ∧
+    outcome (.life .viewing (.fileChangedOnDisk false)) = some (.state .viewing) := by
+  refine ⟨by native_decide, by native_decide⟩
+
+/-- **§3.1, R-05** (T-29): a further watcher event while `RELOADING` is processed as one
+during `VIEWING` — a readable read completes into `VIEWING`, an unreadable one is ignored
+and the state is unchanged. -/
+theorem life_reloading_event :
+    outcome (.life .reloading (.fileChangedOnDisk true)) = some (.state .viewing) ∧
+    outcome (.life .reloading (.fileChangedOnDisk false)) = some (.state .reloading) := by
+  refine ⟨by native_decide, by native_decide⟩
 
 /-- **§3.1, E-21** (T-29): a deleted displayed path is a self-transition:
 `VIEWING` stays `VIEWING`, with the watch armed. -/
@@ -941,7 +952,7 @@ theorem every_state_reached :
     (∃ st ev, lifecycle st ev = some .viewing) ∧ (∃ st ev, lifecycle st ev = some .reloading) ∧
     (∃ st ev, lifecycle st ev = some .closed) :=
   ⟨⟨.empty, .launchEmptyHistory, rfl⟩, ⟨.empty, .openRoute, rfl⟩,
-   ⟨.loading, .loadOk, rfl⟩, ⟨.viewing, .fileChangedOnDisk, rfl⟩,
+   ⟨.loading, .loadOk, rfl⟩, ⟨.viewing, (.fileChangedOnDisk true), rfl⟩,
    ⟨.viewing, .windowClose, rfl⟩⟩
 
 /-- **I-001** (T-13, T-41): environment independence — a typing fact, not a promise.
@@ -1139,10 +1150,11 @@ that were silent are named — deleting a retained row while `EMPTY` leaves the 
 the amended spec declares. -/
 theorem f140_lifecycle_total :
     lifecycle .empty (.deleteDisplayedRow false) = some .empty ∧
-    lifecycle .reloading .fileChangedOnDisk = some .reloading ∧
+    lifecycle .reloading (.fileChangedOnDisk true) = some .viewing ∧
+    lifecycle .reloading (.fileChangedOnDisk false) = some .reloading ∧
     (docStates.all (fun st => lifeEvents.all (fun ev =>
       ((lifecycle st ev).isSome == lifeReachable st ev)))) = true := by
-  refine ⟨rfl, rfl, by native_decide⟩
+  refine ⟨rfl, rfl, rfl, by native_decide⟩
 
 /-- **F-141 (closed at v0.13.1)** (T-08, T-30): C-12 now pins the removal order, and the
 model applies it in that order — rule 1's trailing `#`s with a trim, then the link
