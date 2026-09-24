@@ -160,24 +160,6 @@ def endsWithS (suf s : String) : Bool := suf.toList.reverse.isPrefixOf s.toList.
 /-- C-02 rule 1: a blank line (only whitespace) ends the current block. -/
 def isBlank (l : String) : Bool := trimWs l = ""
 
-/-- Drop every occurrence of `p`. -/
-def dropAll (p : Char) (cs : List Char) : List Char := cs.filter (fun c => c != p)
-
-/-- Drop a doubled `p` (the `**` and `__` removals of C-12) — equivalently, a run
-of `k` copies of `p` leaves `k mod 2` of them. -/
-def dropPair (p : Char) (cs : List Char) : List Char :=
-  let step (st : List Char × Nat) (c : Char) : List Char × Nat :=
-    if c == p then (st.1, st.2 + 1)
-    else (c :: (List.replicate (st.2 % 2) p ++ st.1), 0)
-  let fin := cs.foldl step ([], 0)
-  (List.replicate (fin.2 % 2) p ++ fin.1).reverse
-
-/-- Drop `p` where it is not backslash-escaped — C-12's "unescaped `*`". -/
-def dropUnescaped : Char → List Char → List Char
-  | _, [] => []
-  | p, '\\' :: c :: cs => '\\' :: c :: dropUnescaped p cs
-  | p, c :: cs => if c == p then dropUnescaped p cs else c :: dropUnescaped p cs
-
 /-- Whether the character before an `_` is a letter or digit (word-internal
 underscore). -/
 def prevIsWordChar (prev : Option Char) : Bool :=
@@ -185,11 +167,13 @@ def prevIsWordChar (prev : Option Char) : Bool :=
   | some p => p.isAlphanum
   | none => false
 
-/-- C-12's `_…_` rule: drop both underscores of a pair whose opening `_` is not
-preceded by a letter or digit; keep word-internal underscores. -/
+/-- C-12 rule 3 (v0.13.1): drop both underscores of an `_…_` pair whose opening `_`
+is not preceded by a letter or digit; keep word-internal underscores; a `__` run is
+left to rule 4's scan, which owns it. -/
 def dropEmphUnderscore (cs : List Char) : List Char :=
   let rec go : List Char → Option Char → Bool → List Char
     | [], _, _ => []
+    | '_' :: '_' :: rest, _, isOpen => go rest (some '_') isOpen
     | c :: rest, prev, isOpen =>
         if c == '_' then
           if isOpen then go rest (some c) false
@@ -198,13 +182,22 @@ def dropEmphUnderscore (cs : List Char) : List Char :=
         else c :: go rest (some c) isOpen
   go cs none false
 
-/-- C-12: strip trailing `#`s. -/
-def stripTrailingHashes (cs : List Char) : List Char :=
-  (cs.reverse.dropWhile (fun c => c == '#')).reverse
+/-- C-12 rule 4 (v0.13.1): the left-to-right scan that drops the `**` pairs, every
+backtick, every `_` of a `__` pair, and every unescaped `*`, keeping the escaped
+character alone when it follows a backslash. -/
+def scanStrip : List Char → List Char
+  | [] => []
+  | '\\' :: c :: cs =>
+      if escapableChars.contains c then c :: scanStrip cs else '\\' :: c :: scanStrip cs
+  | '*' :: cs => scanStrip cs
+  | '`' :: cs => scanStrip cs
+  | '_' :: '_' :: cs => scanStrip cs
+  | c :: cs => c :: scanStrip cs
 
-/-- ASCII hex digit. -/
-def isHexDigit (c : Char) : Bool :=
-  c.isDigit || (97 ≤ c.toNat && c.toNat ≤ 102) || (65 ≤ c.toNat && c.toNat ≤ 70)
+/-- C-12 rule 1 (v0.13.1): trailing `#`s are dropped and the surrounding whitespace is
+trimmed. -/
+def stripTrailingHashes (s : String) : String :=
+  trimWs (String.ofList (s.toList.reverse.dropWhile (fun c => c == '#' || c == ' ')).reverse)
 
 /-- `natOfDigits cs` — the value of a digit string (0 when empty). -/
 def natOfDigits (cs : List Char) : Nat := cs.foldl (fun n c => n * 10 + (c.toNat - 48)) 0
@@ -269,8 +262,9 @@ structure RewState where
   out : List Char
   pendingChar : Char
   pending : Nat
-  before : Option Char
-  prev : Option Char
+  before : Option Char      -- the *source* character before the current run
+  prevSrc : Option Char     -- the source character immediately before the current one
+  prevOut : Option Char     -- the last character emitted
   deriving Repr
 
 /-- Whether a list's head is a letter or digit (C-10's `--` between letters or
@@ -279,10 +273,22 @@ def headIsAlnum : List Char → Bool
   | [] => false
   | d :: _ => d.isAlphanum
 
-/-- Whether the preceding character is absent or whitespace (a quote opens there). -/
+/-- Whether the preceding character is absent or whitespace. -/
 def optIsWs : Option Char → Bool
   | none => true
   | some c => isWs c
+
+/-- C-10 (v0.13.1): a quote opens when the preceding **emitted** character is absent,
+whitespace, or one of `Spec.quoteOpeners` (F-144). -/
+def quoteOpens : Option Char → Bool
+  | none => true
+  | some c => isWs c || quoteOpeners.contains c
+
+/-- The last character of a list, or a fallback when it is empty. -/
+def lastOf (l : List Char) (d : Option Char) : Option Char :=
+  match l.reverse with
+  | [] => d
+  | c :: _ => some c
 
 /-- Whether an optional character is a letter or digit. -/
 def optIsAlnum : Option Char → Bool
@@ -316,27 +322,33 @@ def resolveRun (c : Char) (n : Nat) (before after : Option Char) : List Char :=
 def rewStep (st : RewState) (c : Char) : RewState :=
   if c == '-' || c == '.' then
     (if 0 < st.pending && st.pendingChar == c then
-      { st with pending := st.pending + 1, prev := some c }
+      { st with pending := st.pending + 1, prevSrc := some c }
      else
       { st with
-        out := resolveRun st.pendingChar st.pending st.before st.prev ++ st.out
+        out := resolveRun st.pendingChar st.pending st.before st.prevSrc ++ st.out
         pendingChar := c
         pending := 1
-        before := st.prev
-        prev := some c })
+        before := st.prevSrc
+        prevSrc := some c })
   else
-    let flushed := resolveRun st.pendingChar st.pending st.before (some c) ++ st.out
+    let flushed := resolveRun st.pendingChar st.pending st.before (some c)
+    let prevNow := lastOf flushed st.prevOut
     let emitted :=
-      if c == '"' then (if optIsWs st.prev then ['“'] else ['”'])
-      else if c == '\'' then (if optIsWs st.prev then ['‘'] else ['’'])
+      if c == '"' then (if quoteOpens prevNow then ['“'] else ['”'])
+      else if c == '\'' then (if quoteOpens prevNow then ['‘'] else ['’'])
       else [c]
-    { st with out := emitted ++ flushed, pending := 0, pendingChar := '-', prev := some c }
+    { st with
+      out := emitted ++ flushed ++ st.out
+      pending := 0
+      pendingChar := '-'
+      prevSrc := some c
+      prevOut := lastOf emitted st.prevOut }
 
 /-- C-10's literal rewrites for one unprotected run: `---` → em dash, ` -- ` →
 spaced em dash, letter/digit-adjacent `--` → en dash, `...` → ellipsis, and
 directional quotes chosen from the preceding character. -/
 def rewriteRun (cs : List Char) : List Char :=
-  let st := cs.foldl rewStep ⟨[], '-', 0, none, none⟩
+  let st := cs.foldl rewStep ⟨[], '-', 0, none, none, none⟩
   (resolveRun st.pendingChar st.pending st.before none ++ st.out).reverse
 
 /-- C-12: `[text](url)` → `text`. The scanner's state: 0 normal, 1 in `[`, 2 after
@@ -374,15 +386,14 @@ def dropBracketLinks (s : String) : String :=
     else st
   String.ofList fin.out.reverse
 
-/-- C-12's `stripInlineMarkdown`, the removals applied in the spec's listing order. -/
+/-- C-12's `stripInlineMarkdown` (v0.13.1), in the order the spec now pins (F-141):
+(1) trailing `#`s with the surrounding whitespace trimmed, (2) `[text](url)` →
+`text`, (3) the `_…_` pairs, (4) the removal scan, (5) the surrounding whitespace
+trimmed again. -/
 def stripInlineMd (s : String) : String :=
-  let cs := (dropBracketLinks s).toList
-  let cs := dropPair '`' cs
-  let cs := dropPair '*' cs
-  let cs := dropPair '_' cs
-  let cs := dropUnescaped '*' cs
-  let cs := dropEmphUnderscore cs
-  String.ofList (stripTrailingHashes cs)
+  let s2 := dropBracketLinks (stripTrailingHashes s)
+  let s3 := dropEmphUnderscore s2.toList
+  trimWs (String.ofList (scanStrip s3))
 
 /-- C-11's `slug` core scan. -/
 def slugCore : List Char → List Char → Bool → List Char
@@ -520,10 +531,11 @@ def expandShortHex (s : String) : String :=
     else s
   else s
 
-/-- C-06.1 rule 3: the hex value of a CSS colour name. The spec names the 46 names
-(`Spec.cssColorNames`) and pins **no** value for any of them (F-139), so the cell is
-unpinned, not unknown: every value is permitted. -/
-def namedColorHex (_name : String) : Option String := none
+/-- C-06.1 rule 3 (v0.13.1): the hex value of a CSS colour name — the pinned SVG 1.1
+keyword table, case-insensitively. F-139 was that the spec named the 46 names and no
+value; the values are now normative, so this is a total lookup and not an unpinned
+cell. -/
+def namedColorHex (name : String) : Option String := cssColorValues.lookup name.toLower
 
 /-- C-06.1 rule 4: fold every `ID: text` description line for an ID into one alias
 `state "a<br/>b" as ID`, the aliases inserted after the header line. -/
@@ -582,6 +594,93 @@ def validDisplaySpan (body : String) : Bool := !body.isEmpty
 
 /-- C-07.1's placement rule. -/
 def ownParagraphSpan (atLineStart atLineEnd : Bool) : Bool := atLineStart && atLineEnd
+
+/-- `dropN n cs` — `cs` with its first `n` characters removed. -/
+def dropN : Nat → List Char → List Char
+  | 0, cs => cs
+  | _, [] => []
+  | n + 1, _ :: t => dropN n t
+
+/-- The length of the backtick run at the head of a list. -/
+def backtickRunLen : List Char → Nat
+  | '`' :: cs => backtickRunLen cs + 1
+  | _ => 0
+
+/-- C-07.1: skip an inline code span — the opener run of `n` backticks, then
+everything up to a run of exactly `n` (or to the end when it never closes), so no
+candidate inside code is ever a span. -/
+def skipCodeSpan (n : Nat) : Nat → List Char → List Char
+  | 0, cs => cs
+  | _, [] => []
+  | f + 1, cs =>
+      match cs with
+      | [] => []
+      | '`' :: rest =>
+          let run := backtickRunLen rest + 1
+          if run == n then dropN (n - 1) rest else skipCodeSpan n f (dropN (run - 1) rest)
+      | _ :: rest => skipCodeSpan n f rest
+
+/-- C-07.1's display-body scan: consume up to the closing `$$`, honouring `\`
+escapes and aborting (returning `none`) at a backtick — a candidate that reaches a
+backtick before its closer is not a span. -/
+def scanDisplayBody : List Char → Option (List Char × List Char)
+  | [] => none
+  | '`' :: _ => none
+  | '\\' :: d :: cs =>
+      (match scanDisplayBody cs with
+       | none => none
+       | some (b, r) => some ('\\' :: d :: b, r))
+  | '$' :: '$' :: cs => some ([], cs)
+  | c :: cs =>
+      (match scanDisplayBody cs with
+       | none => none
+       | some (b, r) => some (c :: b, r))
+
+/-- C-07.1's inline-body scan: the same, closing on a single `$`. -/
+def scanInlineBody : List Char → Option (List Char × List Char)
+  | [] => none
+  | '`' :: _ => none
+  | '\\' :: d :: cs =>
+      (match scanInlineBody cs with
+       | none => none
+       | some (b, r) => some ('\\' :: d :: b, r))
+  | '$' :: cs => some ([], cs)
+  | c :: cs =>
+      (match scanInlineBody cs with
+       | none => none
+       | some (b, r) => some (c :: b, r))
+
+/-- C-07.1's scan (v0.13.1), which F-146 was that the spec did not state. `fuel`
+bounds the walk; `scanMathSpans` supplies the block's length plus one, and each step
+consumes at least one character. Returns `(isDisplay, latex)` in document order. -/
+def scanMathFuel : Nat → List Char → List (Bool × String)
+  | 0, _ => []
+  | _, [] => []
+  | f + 1, '\\' :: _ :: cs => scanMathFuel f cs
+  | f + 1, '`' :: cs =>
+      let n := backtickRunLen cs + 1
+      scanMathFuel f (skipCodeSpan n (n + cs.length + 1) cs)
+  | f + 1, '$' :: '$' :: cs =>
+      (match scanDisplayBody cs with
+       | none => scanMathFuel f cs
+       | some (b, r) =>
+           if b.all isWs then scanMathFuel f r
+           else (true, String.ofList b) :: scanMathFuel f r)
+  | f + 1, '$' :: c :: cs =>
+      if isWs c then scanMathFuel f (c :: cs)
+      else
+        (match scanInlineBody (c :: cs) with
+         | none => scanMathFuel f (c :: cs)
+         | some (b, r) =>
+             if validInlineSpan b r false then (false, String.ofList b) :: scanMathFuel f r
+             else scanMathFuel f (c :: cs))
+  | f + 1, _ :: cs => scanMathFuel f cs
+
+/-- C-07.1's scan of a whole block: `$$` is tested before `$` at each position, an
+escape is skipped verbatim, a candidate that reaches a backtick or the end before its
+closer is not a span, and an all-whitespace `$$…$$` body is literal. -/
+def scanMathSpans (block : String) : List (Bool × String) :=
+  scanMathFuel (block.length + 1) block.toList
 
 /-- C-07.2 unit (b): the command rewrites, in the spec's order. -/
 def mathRewrite (s : String) : String :=
@@ -1071,6 +1170,7 @@ def lifecycle : DocState → LifeEvent → Option DocState
   | .empty, .launchEmptyHistory => some .empty
   | .empty, .launchWithHistory => some .loading
   | .empty, .openRoute => some .loading
+  | .empty, .deleteDisplayedRow _ => some .empty
   | .empty, .windowClose => some .closed
   | .loading, .openRoute => some .loading
   | .loading, .loadOk => some .viewing
@@ -1085,11 +1185,36 @@ def lifecycle : DocState → LifeEvent → Option DocState
   | .viewing, .deleteDisplayedRow false => some .empty
   | .viewing, .windowClose => some .closed
   | .reloading, .loadOk => some .viewing
+  | .reloading, .fileChangedOnDisk => some .reloading
   | .reloading, .windowClose => some .closed
   | _, _ => none
 
 /-- §3.1: `CLOSED` is terminal: no event leaves it. -/
 def closedIsTerminal : Prop := ∀ ev, lifecycle .closed ev = none
+
+/-- §3.1 (v0.13.1): the cells the table names — the state-and-event pairs the
+application can be in. The table is total, so a pair this predicate rejects is
+*unreachable*, which is why `lifecycle` may return `none` there (F-140). -/
+def lifeReachable : DocState → LifeEvent → Bool
+  | .empty, .launchEmptyHistory => true
+  | .empty, .launchWithHistory => true
+  | .empty, .openRoute => true
+  | .empty, .deleteDisplayedRow _ => true
+  | .empty, .windowClose => true
+  | .loading, .openRoute => true
+  | .loading, .loadOk => true
+  | .loading, .loadUnreadable _ => true
+  | .loading, .windowClose => true
+  | .viewing, .openRoute => true
+  | .viewing, .fileChangedOnDisk => true
+  | .viewing, .pathDeleted => true
+  | .viewing, .transientReadRejected => true
+  | .viewing, .deleteDisplayedRow _ => true
+  | .viewing, .windowClose => true
+  | .reloading, .loadOk => true
+  | .reloading, .fileChangedOnDisk => true
+  | .reloading, .windowClose => true
+  | _, _ => false
 
 /-- The splitter's initial state. -/
 def splitInit : SplitState := ⟨.normal, [], 0, 0, [], []⟩
@@ -1140,9 +1265,10 @@ def tocEntryOf (blocks : List String) (i : Nat) : Option TocHeading :=
       (match headingOf b with
        | none => none
        | some (lvl, line) =>
+           let body := String.ofList (line.toList.drop (lvl + 1))
            some { level := lvl
-                , text := if hasSub line "$" then none else some (stripInlineMd line)
-                , slugText := stripInlineMd line
+                , text := if hasSub body "$" then none else some (stripInlineMd body)
+                , slugText := stripInlineMd body
                 , blockIndex := i })
 
 /-- C-02 rule 7: the TOC headings of the split. -/
@@ -1345,12 +1471,14 @@ def titlePinned (blocks : List String) (i : Nat) (r : String) : Prop :=
     r.toList.isPrefixOf
       ((blocks[i]?.getD "").splitOn "\n" |>.head?.getD "" |> trimWs |> stripInlineMd).toList
 
-/-- C-06.1 rule 3's partial cell: the spec names 46 CSS colour names and pins no hex
-value for any of them, so the pin admits every value (F-139). -/
-def colorPinned (_name : String) (_r : Option String) : Prop := True
+/-- C-06.1 rule 3's cell (v0.13.1): the value is pinned to the SVG 1.1 keyword table,
+so the pin is equality with the lookup — F-139's gap (names without values) is
+closed. -/
+def colorPinned (name : String) (r : Option String) : Prop := r = cssColorValues.lookup name
 
-/-- C-07.1's partial cell: only the acceptance conditions and the placement are
-pinned here; the iteration over a block's text is the implementation's. -/
+/-- C-07.1's cell (v0.13.1): the acceptance conditions, the placement, and — since
+F-146 — the scan itself (`scanMathSpans`). The pin is that a candidate is accepted
+exactly when the conditions hold. -/
 def mathPinned (body : List Char) (after : List Char) (x r : Bool) : Prop :=
   r = validInlineSpan body after x
 

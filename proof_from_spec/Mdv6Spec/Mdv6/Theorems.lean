@@ -245,9 +245,10 @@ theorem split_map_halfopen :
         ⟨[ "# Sibling", "para", "## Second heading", "para", "## Third heading", "para" ]
         , [(1, 2), (3, 4), (5, 6), (7, 8), (9, 10), (11, 12)]
         , 11
-        , [ ⟨1, some "# Sibling", "# Sibling", 0⟩
-          , ⟨2, some "## Second heading", "## Second heading", 2⟩
-          , ⟨2, some "## Third heading", "## Third heading", 4⟩ ]⟩) := by native_decide
+        , [ ⟨1, some "Sibling", "Sibling", 0⟩
+          , ⟨2, some "Second heading", "Second heading", 2⟩
+          , ⟨2, some "Third heading", "Third heading", 4⟩ ]⟩) := by
+  native_decide
 
 /-- **C-02 rule 7, E-22** (T-22): only single-line ATX `#`–`###` headings are slug
 targets — an h4 and a setext heading contribute no TOC entry, so no fragment can
@@ -532,9 +533,11 @@ theorem sanitize_hex_untouched : expandShortHex "white" = "white" := by native_d
 /-- **C-06.1 rule 3** (T-15): the model pins **no** hex value for any CSS colour
 name — the spec names the 46 names and no value, so this cell is unpinned, not
 unknown. See F-139. -/
-theorem sanitize_color_name_unpinned :
-    namedColorHex "white" = none ∧ namedColorHex "red" = none ∧
-    namedColorHex "transparent" = none := by native_decide
+theorem sanitize_color_values :
+    namedColorHex "white" = some "#ffffff" ∧ namedColorHex "green" = some "#008000" ∧
+    namedColorHex "grey" = some "#808080" ∧ namedColorHex "transparent" = some "#00000000" ∧
+    namedColorHex "GYA" = none := by
+  refine ⟨by native_decide, by native_decide, by native_decide, by native_decide, by native_decide⟩
 
 /-- **C-06.1 rule 4** (T-20): an ID's description lines fold into one alias inserted
 after the header, and the original lines are removed. -/
@@ -1110,97 +1113,111 @@ theorem every_harness_exit_reached :
 
 /-! ## Findings
 
-The witnesses for `docs/reviews/SPEC_MODEL_FINDINGS.md`. Each theorem is the
-kernel-checked half of a finding; the argument and the proposed resolution live in
-that file. -/
+Each declaration is the kernel-checked witness of a finding in
+`docs/reviews/SPEC_MODEL_FINDINGS.md`. **All nine were applied to `SPEC.md` in
+v0.13.1**, so each witness below now discharges the *closed* state: it asserts the
+behaviour the amended spec pins, and the model proves it. -/
 
-/-- **F-139 · G-2** (T-15): `C-06.1` rule 3 names 46 CSS colour names and pins **no**
-hex value for any of them, so two conforming implementations may render
-`fill:white` differently. Witness: the pin admits every value for every name, and
-the model's only total realisation returns nothing. -/
-theorem f139_color_map_unpinned :
-    (∀ name r, colorPinned name r) ∧ (∀ name, namedColorHex name = none) ∧
-    cssColorNames.length = 46 := by
-  refine ⟨fun _ _ => trivial, fun _ => rfl, by native_decide⟩
+/-- **F-139 (closed at v0.13.1)** (T-15): C-06.1 rule 3 now names the 46 colour names
+*and* their SVG 1.1 values, so the model's lookup is total and the pin is equality with
+it. The witness checks the whole table: 46 entries, every name resolving to its pinned
+value, and a name outside the list resolving to nothing. -/
+theorem f139_color_map_pinned :
+    cssColorValues.length = 46 ∧
+    (∀ name v, cssColorValues.lookup name = some v → colorPinned name (some v)) ∧
+    namedColorHex "white" = some "#ffffff" ∧ namedColorHex "red" = some "#ff0000" ∧
+    namedColorHex "green" = some "#008000" ∧ namedColorHex "grey" = some "#808080" ∧
+    namedColorHex "GREEN" = some "#008000" ∧ namedColorHex "transparent" = some "#00000000" ∧
+    namedColorHex "rebeccapurple" = none := by
+  refine ⟨by decide, fun name v h => by simp [colorPinned, h], by native_decide, by native_decide,
+          by native_decide, by native_decide, by native_decide, by native_decide, by native_decide⟩
 
-/-- **F-140 · G-1** (T-28, T-29): §3.1's transition table is partial. Two cells a
-reader can reach from a state §3.1 puts the application in have no stated outcome:
-deleting the last history row while `EMPTY` with R-40's retained unreadable head,
-and a second watcher event while `RELOADING` (R-05 says a burst yields at most two
-reloads, and does not say what the state machine does with the second). Witness: the
-model returns `none` for both, and the silent set is not confined to `CLOSED`. -/
-theorem f140_lifecycle_silent_cells :
-    (∃ st ev, st ≠ .closed ∧ lifecycle st ev = none) ∧
-    lifecycle .empty (.deleteDisplayedRow false) = none ∧
-    lifecycle .reloading .fileChangedOnDisk = none := by
-  refine ⟨⟨.empty, .loadOk, by decide, rfl⟩, rfl, rfl⟩
+/-- **F-140 (closed at v0.13.1)** (T-28, T-29): §3.1's table is now total. The two cells
+that were silent are named — deleting a retained row while `EMPTY` leaves the window
+`EMPTY`, and a further watcher event during `RELOADING` is processed as one during
+`VIEWING` — and the residual `none`s are *exactly* the table's unreachable pairs, which
+the amended spec declares. -/
+theorem f140_lifecycle_total :
+    lifecycle .empty (.deleteDisplayedRow false) = some .empty ∧
+    lifecycle .reloading .fileChangedOnDisk = some .reloading ∧
+    (docStates.all (fun st => lifeEvents.all (fun ev =>
+      ((lifecycle st ev).isSome == lifeReachable st ev)))) = true := by
+  refine ⟨rfl, rfl, by native_decide⟩
 
-/-- **F-141 · G-2** (T-08, T-30): `C-12` lists the removals `stripInlineMarkdown`
-performs without pinning their order, and the order is observable on the same input.
-Witness: for `**a**b` the spec's listing order leaves nothing, while removing the
-backticks and underscores before the asterisk runs leaves the string unchanged. -/
-theorem f141_strip_order_observable :
-    stripInlineMd "**a**b" = "ab" ∧
-    dropPair '_' (dropPair '`' ("**a**b".toList)) ≠
-      dropPair '*' (dropPair '`' ("**a**b".toList)) := by
+/-- **F-141 (closed at v0.13.1)** (T-08, T-30): C-12 now pins the removal order, and the
+model applies it in that order — rule 1's trailing `#`s with a trim, then the link
+reduction, then the `_…_` pairs (a `__` run left to the scan), then the scan that owns
+`**`, backticks, `__` and the unescaped `*` and honours a backslash escape. -/
+theorem f141_strip_order_pinned :
+    stripInlineMd "# Title ##" = "# Title" ∧
+    stripInlineMd "[t](u) _e_" = "t e" ∧
+    stripInlineMd "__a__" = "a" ∧
+    stripInlineMd "_Draft_ notes" = "Draft notes" ∧
+    stripInlineMd "a\\*b" = "a*b" ∧
+    stripInlineMd "snake_case" = "snake_case" := by native_decide
+
+/-- **F-142 (closed at v0.13.1)** (T-08): rule 7's "first line only" and the
+`ParsedDocument` field comment now say the same thing — a multi-line block contributes
+one entry from its first line, with the same level and slug as the one-line form. -/
+theorem f142_heading_multiline_block :
+    (tocOf ["# Title\nbody text"]).map (fun h => (h.level, h.slugText)) =
+      (tocOf ["# Title"]).map (fun h => (h.level, h.slugText)) ∧
+    (tocOf ["# Title\nbody text"]).length = 1 := by native_decide
+
+/-- **F-143 (closed at v0.13.1)** (T-08, T-44): rule 7 now says `text` and `slugText` are
+computed from the heading **body**, so the ATX marker reaches neither the TOC nor a slug
+— which is what T-08 expects. -/
+theorem f143_toc_text_strips_marker :
+    (tocOf ["# Sibling"]).map (fun h => (h.text, h.slugText)) = [(some "Sibling", "Sibling")] ∧
+    slug "Sibling" = "sibling" := by
   refine ⟨by native_decide, by native_decide⟩
 
-/-- **F-142 · G-2** (T-08, T-21): `C-02` rule 7 says a heading uses "its first line
-only", while `ParsedDocument`'s own field comment says `single-line ATX only`. Both
-readings are conforming and differ for a block whose first line is an ATX heading
-with more lines under it. Witness: the model takes rule 7's literal reading, so such
-a block contributes a TOC entry with the same level and slug as the one-line form. -/
-theorem f142_heading_multiline_block :
-    (tocOf ["# Title\nbody text"]).length = 1 ∧
-    (tocOf ["# Title\nbody text"]).map (fun h => h.level) =
-      (tocOf ["# Title"]).map (fun h => h.level) ∧
-    (tocOf ["# Title\nbody text"]).map (fun h => h.slugText) = ["# Title"] := by
-  native_decide
-
-/-- **F-143 · G-2** (T-08, T-44): `C-12` removes *trailing* `#`s and says nothing
-about the leading ATX marker, so a literal reading leaves the marker in
-`TOCHeading.text` — while T-08 expects the TOC to show the heading text without it.
-Witness: the model's `text` for the heading block is `# Sibling`. -/
-theorem f143_toc_text_keeps_marker :
-    (tocOf ["# Sibling"]).map (fun h => h.text) = [some "# Sibling"] := by
-  native_decide
-
-/-- **F-144 · G-2** (T-10): `C-10` says a quote's direction is "chosen from the
-preceding character" without pinning which preceding characters open and which
-close. Witness: the direction is a total function of the preceding character alone,
-and it flips on exactly one input character (`a "b` opens, `a"b` closes). -/
-theorem f144_quote_direction_unpinned :
+/-- **F-144 (closed at v0.13.1)** (T-10): C-10 now pins the quote predicate, over the
+**emitted** stream — which is why the set names `—`: a dash run flushed immediately
+before a quote is the character that quote opens after. -/
+theorem f144_quote_direction_pinned :
     rewriteRun "a \"b".toList = ['a', ' ', '“', 'b'] ∧
-    rewriteRun "a\"b".toList = ['a', '”', 'b'] := by
-  native_decide
+    rewriteRun "a\"b".toList = ['a', '”', 'b'] ∧
+    rewriteRun "a --- \"b\"".toList = ['a', ' ', '—', ' ', '“', 'b', '”'] ∧
+    quoteOpeners = ['(', '[', '{', '<', '“', '‘', '—', '–', '-', '/'] := by
+  refine ⟨by native_decide, by native_decide, by native_decide, rfl⟩
 
-/-- **F-145 · G-2** (T-10): `C-10` defines a GFM table by example — "a `|---|`
-separator row" — while R-24 defines it exactly. The two predicates differ: R-24's
-accepts `a|b` / `-|-`, which no `|---|` example shows. Witness: the model uses
-R-24's definition, so a block with no leading or trailing `|` is still a table. -/
-theorem f145_table_definition_diverges :
-    isGfmTableBlock "a|b\n-|-" = true ∧ hasSub "-|-" "|---|" = false := by
-  native_decide
+/-- **F-145 (closed at v0.13.1)** (T-10): C-10 now cites R-24's exact test, so the spec
+holds one table predicate and the model one function. The witness shows the case that
+separated the two old readings is accepted by the shared test. -/
+theorem f145_table_definition_aligned :
+    isGfmTableBlock "a|b\n-|-" = true ∧ isGfmTableBlock "| a |\n|---|" = true ∧
+    isGfmTableBlock "a|b\nx|y" = false ∧ hasSub "-|-" "|---|" = false := by native_decide
 
-/-- **F-146 · G-3a** (T-07): `C-07.1` pins a candidate span's acceptance and its
-placement, and says nothing about the scan that *finds* candidates in a block's
-text — the precedence of `$$` over `$` and the fate of an unclosed `$`. The model
-does not contain it either, so the spec has no witness for it: the machine-checkable
-part is the audit's ID join, where C-07 carries a T-id for its stated half and none
-for this one. -/
-theorem f146_scan_unwitnessed :
-    validInlineSpan ("x".toList) ([] : List Char) false = true ∧
-    validDisplaySpan "" = false := by
-  refine ⟨by decide, by decide⟩
+/-- **F-146 (closed at v0.13.1)** (T-07): C-07.1 now states its scan, and the model
+implements it. The witness covers each clause the clause names: `$$` before `$`, the
+escape, the backtick abort, the unterminated opener, the all-whitespace `$$…$$` body, and
+the code span. -/
+theorem f146_scan_stated :
+    scanMathSpans "no math here" = [] ∧
+    scanMathSpans "a $x$ b" = [(false, "x")] ∧
+    scanMathSpans "$$x$$" = [(true, "x")] ∧
+    scanMathSpans "$x$ $y$" = [(false, "x"), (false, "y")] ∧
+    scanMathSpans "\\$x$ y" = [] ∧
+    scanMathSpans "`$x$`" = [] ∧
+    scanMathSpans "$$$$" = [] ∧
+    scanMathSpans "$$\nr = 1\n$$" = [(true, "\nr = 1\n")] := by
+  refine ⟨by native_decide, by native_decide, by native_decide, by native_decide,
+          by native_decide, by native_decide, by native_decide, by native_decide⟩
 
-/-- **F-147 · G-2** (T-24): `C-03` says the six characters are dropped from each
-token, which `stripFtsChars` reads as dropping them *anywhere* — so two different
-queries become the same FTS term. The spec's intent ("the characters are not
-syntax") is narrower than the operation it states. Witness: `a"b` and `ab` produce
-the same query. -/
+/-- **F-146 (closed at v0.13.1)** (T-07): E-07's literal forms are not spans — the
+closing-delimiter conditions and the scan agree with the row the spec states. -/
+theorem scan_e07_forms :
+    scanMathSpans "$5 and $10" = [] ∧ scanMathSpans "$5-$10" = [] ∧
+    scanMathSpans "$100/month" = [] ∧ scanMathSpans "$$\n$$" = [] ∧
+    scanMathSpans "$$ $5 and $ $$" = [(true, " $5 and $ ")] := by
+  refine ⟨by native_decide, by native_decide, by native_decide, by native_decide,
+          by native_decide⟩
+
+/-- **F-147 (closed at v0.13.1)** (T-24): C-03 now says the drop is deletion and records
+the collision as accepted, which is what the model does. -/
 theorem f147_token_collision :
-    ftsQuery "a\"b" = ftsQuery "ab" ∧ ftsQuery "a\"b" = "\"ab\"*" := by
-  native_decide
+    ftsQuery "a\"b" = ftsQuery "ab" ∧ ftsQuery "a\"b" = "\"ab\"*" := by native_decide
 
 /-! ## The deferral table
 

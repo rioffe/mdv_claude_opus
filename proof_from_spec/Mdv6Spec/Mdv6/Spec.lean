@@ -38,6 +38,10 @@ def isAscii (s : String) : Bool := s.toList.all (fun c => c.toNat < 128)
 bridge between a spec text and its byte table (see `Facts`). -/
 def asciiBytes (s : String) : List UInt8 := s.toList.map (fun c => UInt8.ofNat (c.toNat % 256))
 
+/-- ASCII hex digit — used by the colour-value and hex-expansion facts. -/
+def isHexDigit (c : Char) : Bool :=
+  c.isDigit || (97 ≤ c.toNat && c.toNat ≤ 102) || (65 ≤ c.toNat && c.toNat ≤ 70)
+
 /-- `hasScalar s n` — `s` contains the scalar `n`. Lets "contains no CR" be a
 closed proposition over a `String`. -/
 def hasScalar (s : String) (n : Nat) : Bool := s.toList.any (fun c => c.toNat == n)
@@ -315,11 +319,38 @@ def cssColorNames : List String :=
   , "violet", "khaki", "tan", "wheat", "mintcream", "honeydew", "aliceblue", "whitesmoke"
   , "gainsboro", "snow", "transparent", "none" ]
 
+/-- **C-06.1 rule 3 (v0.13.1)** — the pinned value of each colour name: the SVG 1.1
+keyword table, 44 colours plus the two transparent forms. F-139 was that the names
+were listed and no value was, so two conforming builds could render `fill:white`
+differently; the values are now normative. -/
+def cssColorValues : List (String × String) :=
+  [ ("white", "#ffffff"), ("black", "#000000"), ("red", "#ff0000"), ("green", "#008000")
+  , ("blue", "#0000ff"), ("yellow", "#ffff00"), ("orange", "#ffa500"), ("purple", "#800080")
+  , ("gray", "#808080"), ("grey", "#808080"), ("lightgray", "#d3d3d3"), ("lightgrey", "#d3d3d3")
+  , ("darkgray", "#a9a9a9"), ("silver", "#c0c0c0"), ("pink", "#ffc0cb"), ("lightblue", "#add8e6")
+  , ("lightgreen", "#90ee90"), ("lightyellow", "#ffffe0"), ("gold", "#ffd700"), ("teal", "#008080")
+  , ("navy", "#000080"), ("maroon", "#800000"), ("olive", "#808000"), ("cyan", "#00ffff")
+  , ("magenta", "#ff00ff"), ("brown", "#a52a2a"), ("beige", "#f5f5dc"), ("ivory", "#fffff0")
+  , ("lavender", "#e6e6fa"), ("coral", "#ff7f50"), ("salmon", "#fa8072"), ("tomato", "#ff6347")
+  , ("crimson", "#dc143c"), ("indigo", "#4b0082"), ("violet", "#ee82ee"), ("khaki", "#f0e68c")
+  , ("tan", "#d2b48c"), ("wheat", "#f5deb3"), ("mintcream", "#f5fffa"), ("honeydew", "#f0fff0")
+  , ("aliceblue", "#f0f8ff"), ("whitesmoke", "#f5f5f5"), ("gainsboro", "#dcdcdc"), ("snow", "#fffafa")
+  , ("transparent", "#00000000"), ("none", "#00000000") ]
+
 /-- **C-06.1 rule 3** — the properties a colour name must follow to be mapped. -/
 def colorProperties : List String := ["fill:", "stroke:", "color:"]
 
 /-- **C-06.1 rule 3** — `transparent`/`none` both become the 8-digit form `#00000000`. -/
 def transparentHex : String := "#00000000"
+
+/-- **C-10 (v0.13.1)** — the characters after which a quote opens: absent, whitespace,
+or one of these. The set names `—` and `–`, which exist only as *outputs* of the
+same pass, so the predicate is over the emitted stream (F-144). -/
+def quoteOpeners : List Char := ['(', '[', '{', '<', '“', '‘', '—', '–', '-', '/']
+
+/-- **C-12 (v0.13.1)** — the characters whose escape is honoured by the removal scan
+(rule 4's order clause, F-141). -/
+def escapableChars : List Char := ['*', '_', '`', '#', '[', ']', '\\']
 
 /-- **C-06.1 rule 6** — the inline formatting tags stripped (open and close), with
 their content kept. `<br/>` is deliberately absent: it is left alone. -/
@@ -1139,6 +1170,40 @@ distinct, and `comment` is among them (italic per C-05). -/
 theorem c05_captures :
     captureKinds.length = 6 ∧ captureKinds.eraseDups = captureKinds ∧
     captureKinds.contains "comment" := by decide
+
+/-- **C-06.1 rule 3 (v0.13.1)** — the value table covers the name list exactly: same
+names, same order, no name without a value and no extra name (F-139, closed). -/
+theorem c061_color_values_total :
+    cssColorValues.map (fun p => p.1) = cssColorNames ∧
+    cssColorValues.length = 46 ∧ cssColorNames.length = 46 := by decide
+
+/-- **C-06.1 rule 3 (v0.13.1)** — every pinned value is a `#` plus 6 or 8 hex digits, so
+no value can be malformed (F-139, closed). -/
+theorem c061_color_values_wellformed :
+    (cssColorValues.all (fun p =>
+      (p.2.toList.head? == some '#') &&
+      (p.2.toList.length == 7 || p.2.toList.length == 9) &&
+      ((p.2.toList.drop 1).all isHexDigit))) = true := by native_decide
+
+/-- **C-06.1 rule 3 (v0.13.1)** — `transparent` and `none` share the 8-digit transparent
+value, and no other name does (F-139, closed). -/
+theorem c061_transparent_values :
+    cssColorValues.lookup "transparent" = some transparentHex ∧
+    cssColorValues.lookup "none" = some transparentHex ∧
+    (cssColorValues.filter (fun p => p.2 = transparentHex)).length = 2 := by decide
+
+/-- **C-10 (v0.13.1)** — the opening-quote set is distinct and contains both dashes
+that the same pass emits, which is why it is a set over the emitted stream (F-144). -/
+theorem c10_quote_openers :
+    quoteOpeners.eraseDups = quoteOpeners ∧
+    quoteOpeners.contains '—' ∧ quoteOpeners.contains '–' ∧
+    quoteOpeners.contains '"' = false := by decide
+
+/-- **C-12 (v0.13.1)** — the escape set is distinct and excludes the quote and the
+backtick's sibling `;` (F-141). -/
+theorem c12_escapable_chars :
+    escapableChars.eraseDups = escapableChars ∧ escapableChars.length = 7 ∧
+    escapableChars.contains '*' ∧ escapableChars.contains '#' := by decide
 
 end Facts
 

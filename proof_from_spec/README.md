@@ -1,6 +1,6 @@
 # mdv6 — spec model
 
-Lean 4 formalization of what [`SPEC.md`](../SPEC.md) v0.13 *says* — its normative tables as a pure
+Lean 4 formalization of what [`SPEC.md`](../SPEC.md) v0.13.1 *says* — its normative tables as a pure
 total function, with the spec's own claims about itself kernel-checked.
 
 > **There is no implementation.** This certifies the spec, not a system. The spec's §9 tests are
@@ -14,7 +14,7 @@ program at all. The bridge has three legs and this project builds only the middl
 | leg | claims | evidence |
 | --- | --- | --- |
 | **A. Transcription** | the model is a faithful transcription of the spec's normative tables | **manual** — the correspondence table at the head of `Mdv6Spec/Mdv6/Model.lean`, anchor by anchor; made *checkable* (not proven) by the row theorems in `section Rows` |
-| **B. Lean (this project)** | the model satisfies the claims the spec makes about itself — for all inputs | `lake build` — 202 kernel-checked declarations |
+| **B. Lean (this project)** | the model satisfies the claims the spec makes about itself — for all inputs | `lake build` — 597 kernel-checked declarations |
 | **C. Empirical** | the *system* the spec describes behaves as specified | **does not exist** — no implementation; the spec's §9 tests are *planned*, never run |
 
 A green `lake build` here means the spec is internally consistent, total over the input space it
@@ -35,7 +35,7 @@ proof_from_spec/
     └── Theorems.lean           the proof
 ```
 
-* **`Spec.lean` — the spec side.** 226 declarations: 130 pinned constants (the §5.2 exit map and
+* **`Spec.lean` — the spec side.** 235 declarations: 134 pinned constants (the §5.2 exit map and
   its two diagnostics; the K-04 zoom range and pane clamps; K-10/K-13's article and column numbers;
   C-09's nine themes and the three that refuse smart typography; C-04's twelve preference keys;
   C-05's seventeen fence words and the alias table; C-06.1's 46 CSS colour names, tag list and
@@ -43,11 +43,11 @@ proof_from_spec/
   timings; K-14's and C-16's ceilings; C-17's exits and pixel tolerance; §7.1's ink threshold;
   R-01/R-02/R-03's route and extension sets; C-15's JSON keys; C-03's dropped characters and
   ordering keys; C-19.1's grammar and its accepted/rejected examples; §3.1's states; C-02's
-  markers), each quoting the spec's normative text, plus 96 `Facts` lemmas — closed `decide`-able
+  markers), each quoting the spec's normative text, plus 101 `Facts` lemmas — closed `decide`-able
   checks that the spec's own claims about those constants are mutually consistent (distinctness,
   ordering, ASCII-ness, no CR/LF, the K-13 worked arithmetic, alias disjointness, §7.2's
   handle rule).
-* **`Model.lean` — the model.** The spec's tables as a pure, total function: `Input` (one
+* **`Model.lean` — the model.** 159 declarations: the spec's tables as a pure, total function: `Input` (one
   constructor per group of spec rows; a row stated for "any" input carries that input as a field),
   `Result` (the observable cells), and `outcome : Input → Option Result` where **`none` means the
   spec states no outcome for this input** — never an invented outcome. The spec's partial cells
@@ -55,12 +55,12 @@ proof_from_spec/
   60-cluster truncation, C-07.1's scan) are carried by `Prop`-valued pins that the invariant
   theorems take as hypotheses: the hypotheses are the spec, not the model. The correspondence table
   at the head of the file is leg A.
-* **`Theorems.lean` — the proof.** 202 declarations in six sections: `Rows` (transcription, one
+* **`Theorems.lean` — the proof.** 203 declarations in six sections: `Rows` (transcription, one
   theorem per spec row — see the tautology rule below), `Invariants` (the claims quantified over
   the whole input space: the CLI's closed exit set and its diagnostics contracts, §3.1's closed
   state set, I-001's environment independence, I-004's determinism, the K-04/R-11/C-04/K-14/C-07.1
   closure and monotonicity facts), `Reachability` (every exit code, state, route kind, fragment
-  kind, ceiling kind and harness exit reached), `Findings` (one witness per spec-precision gap),
+  kind, ceiling kind and harness exit reached), `Findings` (one closure witness per spec-precision gap, all nine applied in v0.13.1),
   and the closing tables: **the deferral table** (every ID out of Lean's reach, with the planned
   §9 test that will carry it), **the §9 witness plan** (all 51 T-ids), **the excluded table** (the
   cases the spec puts out of scope by name) and **the decision table** (D-01…D-45, provenance
@@ -111,28 +111,30 @@ Audited mechanically (`grep -rhoE '\*\*[^*]+\*\*' Mdv6Spec/ | tr -d '*' | grep -
 
 ## Findings
 
-Nine spec-precision gaps, each with a kernel-checked witness — see
-[`docs/reviews/SPEC_MODEL_FINDINGS.md`](../docs/reviews/SPEC_MODEL_FINDINGS.md):
+Nine spec-precision gaps were found by building this model and **all nine were applied to
+`SPEC.md` in v0.13.1** — see [`docs/reviews/SPEC_MODEL_FINDINGS.md`](../docs/reviews/SPEC_MODEL_FINDINGS.md)
+for what each gap was, what the amended spec says instead, and the closure witness:
 
-* **F-139 · G-2 · P1** — C-06.1 rule 3 names 46 CSS colour names and pins no hex value
-  (`f139_color_map_unpinned`);
-* **F-140 · G-1 · P1** — §3.1's lifecycle table is partial; two reachable cells have no stated
-  outcome, and twelve more are silent because they are unreachable
-  (`f140_lifecycle_silent_cells`);
-* **F-141 · G-2 · P2** — `stripInlineMarkdown`'s removals have no pinned order, and the order is
-  observable (`f141_strip_order_observable`);
-* **F-142 · G-2 · P2** — "uses its first line only" (rule 7) vs "single-line ATX only" (the field
-  comment) (`f142_heading_multiline_block`);
-* **F-143 · G-2 · P1** — the TOC's `TOCHeading.text` keeps the ATX marker under a literal reading of
-  C-12, contradicting T-08 (`f143_toc_text_keeps_marker`);
-* **F-144 · G-2 · P2** — a quote's direction is "chosen from the preceding character", unpinned
-  (`f144_quote_direction_unpinned`);
-* **F-145 · G-2 · P2** — C-10 defines a GFM table by example, R-24 defines it exactly, and the two
-  predicates differ (`f145_table_definition_diverges`);
-* **F-146 · G-3a · P1** — C-07.1's span *scan* (as opposed to its acceptance conditions) has no
-  proof and no planned test (`f146_scan_unwitnessed`);
+* **F-139 · G-2 · P1** — C-06.1 rule 3 named 46 CSS colour names and pinned no value → the SVG 1.1
+  values are now normative (`f139_color_map_pinned`);
+* **F-140 · G-1 · P1** — §3.1's lifecycle table was partial, leaving a reachable `EMPTY`+delete-row
+  and `RELOADING`+event cell unstated → both named and the table declared total
+  (`f140_lifecycle_total`);
+* **F-141 · G-2 · P2** — `stripInlineMarkdown`'s removals had no order → the five-step order is
+  stated (`f141_strip_order_pinned`);
+* **F-142 · G-2 · P2** — "uses its first line only" vs "single-line ATX only" → rule 7 and the field
+  comment now agree (`f142_heading_multiline_block`);
+* **F-143 · G-2 · P1** — the TOC's `text` kept the ATX marker, contradicting T-08 → `text` and
+  `slugText` now come from the heading body (`f143_toc_text_strips_marker`);
+* **F-144 · G-2 · P2** — a quote's direction was unpinned → the opening-quote predicate is stated
+  (`f144_quote_direction_pinned`);
+* **F-145 · G-2 · P2** — C-10 defined a GFM table by example, R-24 exactly → C-10 now cites R-24's
+  test (`f145_table_definition_aligned`);
+* **F-146 · G-3a · P1** — C-07.1's span *scan* had no proof and no planned test → the scan is stated
+  and modelled (`f146_scan_stated`, `scan_e07_forms`);
 * **F-147 · G-2 · P2** — "drop the characters from each token" deletes them, so `a"b` and `ab`
-  collide in the index (`f147_token_collision`).
+  collide → documented as deletion and accepted (`f147_token_collision`).
 
-`SPEC.md` was not edited to make any proof close: the model reads the spec, it does not negotiate
-with it.
+`SPEC.md` was amended on the maintainer's instruction — each resolution is the behaviour the as-built
+implementation already had, now stated, and the model was re-verified against the amended spec. The
+model itself never negotiates with the spec: it reads it.
