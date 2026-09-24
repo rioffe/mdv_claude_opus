@@ -1,0 +1,6 @@
+name = "mdv6_spec"
+version = "0.1.0"
+defaultTargets = ["Mdv6Spec"]
+
+[[lean_lib]]
+name = "Mdv6Spec"
