@@ -40,7 +40,7 @@ $$
 
 ### Boxed and registered symbols
 
-$\boxed{x = 1}$ and $a \gtrsim b \leqslant c \implies d \hookrightarrow e$, $\varnothing \checkmark \iint \intercal$.
+$\boxed{x = 1}$ and $a \gtrsim b \leqslant c \implies d \hookrightarrow e$, $\varnothing \checkmark \iint \intercal$, and the norm $\lVert \vec{v} \rVert = 1$.
 
 ### Must NOT become math
 

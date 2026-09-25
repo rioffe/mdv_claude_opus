@@ -609,6 +609,8 @@ theorem math_rewrites :
     mathRewrite "\\boldsymbol{x}" = "\\bm{x}" ∧
     mathRewrite "\\bmod" = "\\;\\mathrm{mod}\\;" ∧
     mathRewrite "\\not=" = "\\neq" ∧
+    mathRewrite "\\lVert w \\rVert" = "\\Vert w \\Vert" ∧
+    mathRewrite "\\lvert w \\rvert" = "\\vert w \\vert" ∧
     mathRewrite "\\coloneqq" = ":=" ∧
     mathRewrite "\\begin{align}" = "\\begin{aligned}" ∧
     mathRewrite "\\begin{multline}" = "\\begin{gather}" ∧

@@ -60,6 +60,8 @@ public enum MathSymbols {
             (rx(#"\\bmod\b"#), lit(#"\;\mathrm{mod}\;"#)),
             (rx(#"\\pmod\{([^}]*)\}"#), lit(#"\;(\mathrm{mod}\;"#) + "$1" + lit(")")),
             (rx(#"\\not="#), lit(#"\neq"#)),
+            (rx(#"\\[lr]Vert\b"#), lit(#"\Vert"#)),
+            (rx(#"\\[lr]vert\b"#), lit(#"\vert"#)),
             (rx(#"\\(?:big|Big|bigg|Bigg)[lrm]?\s*(?=[\\(\[\]){}|.<>/])"#), ""),
             (rx(#"\\coloneqq\b"#), ":="),
             (rx(#"\\(begin|end)\{(align|equation|gather|multline)\*\}"#), lit("\\") + "$1{$2}"),

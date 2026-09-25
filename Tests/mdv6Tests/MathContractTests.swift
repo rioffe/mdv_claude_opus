@@ -123,6 +123,10 @@ final class MathContractTests: XCTestCase {
         XCTAssertEqual(MathSymbols.preprocess("a \\bmod b"), "a \\;\\mathrm{mod}\\; b")
         XCTAssertEqual(MathSymbols.preprocess("a \\pmod{n}"), "a \\;(\\mathrm{mod}\\;n)")
         XCTAssertEqual(MathSymbols.preprocess("a \\not= b"), "a \\neq b")
+        XCTAssertEqual(MathSymbols.preprocess("\\lVert w \\rVert"), "\\Vert w \\Vert")
+        XCTAssertEqual(MathSymbols.preprocess("\\lvert w \\rvert"), "\\vert w \\vert")
+        XCTAssertEqual(MathSymbols.preprocess("\\left\\lVert w \\right\\rVert"), "\\left\\Vert w \\right\\Vert")
+        XCTAssertEqual(MathSymbols.preprocess("\\lVertneqq a"), "\\lVertneqq a")   // a longer command name is not the rewrite's target
         XCTAssertEqual(MathSymbols.preprocess("\\big( x \\Big) \\bigg[ \\Bigg] \\bigl\\{ \\bigr\\} \\Bigm|"), "( x ) [ ] \\{ \\} |")
         XCTAssertEqual(MathSymbols.preprocess("a \\coloneqq b"), "a := b")
         XCTAssertEqual(MathSymbols.preprocess("\\begin{align*}x\\end{align*}"), "\\begin{aligned}x\\end{aligned}")

@@ -33,7 +33,9 @@ final class MathRenderTests: XCTestCase {
         for latex in ["a \\gtrsim b \\leqslant c \\implies d", "\\boxed{E = mc^2}", "\\operatorname{sin} x", "\\dfrac{a}{b}",
                       "\\begin{align*} a &= b \\\\ c &= d \\end{align*}", "f(x) = \\begin{cases} 1 & x > 0 \\\\ 0 & \\text{else} \\end{cases}",
                       "\\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}", "\\hookrightarrow \\varnothing \\checkmark \\iint \\intercal",
-                      "\\pmod{n} \\bmod \\coloneqq \\not= \\big( x \\big)", "\\mathbb{R} \\vec{v} \\hat{x}"] {
+                      "\\pmod{n} \\bmod \\coloneqq \\not= \\big( x \\big)", "\\mathbb{R} \\vec{v} \\hat{x}",
+                      "\\lVert w \\rVert \\lvert w \\rvert \\left\\lVert \\vec{v} \\right\\rVert",
+                      "\\mathit{blocksize} = \\max\\!\\left(T, \\left\\lceil \\sum_{w \\in \\mathit{work}} \\lVert w \\rVert / \\mathit{maxseq} \\right\\rceil\\right)"] {
             if case .fallback(_, let message) = MathImageCache.shared.rendered(for: spec(latex, display: true), scale: 2) {
                 XCTFail("\(latex) fell back: \(message ?? "")")
             }

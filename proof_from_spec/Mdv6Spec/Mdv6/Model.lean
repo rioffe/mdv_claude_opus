@@ -692,6 +692,8 @@ def mathRewrite (s : String) : String :=
   let s := s.replace "\\boldsymbol" "\\bm"
   let s := s.replace "\\bmod" "\\;\\mathrm{mod}\\;"
   let s := s.replace "\\not=" "\\neq"
+  let s := (s.replace "\\lVert" "\\Vert").replace "\\rVert" "\\Vert"
+  let s := (s.replace "\\lvert" "\\vert").replace "\\rvert" "\\vert"
   let s := s.replace "\\coloneqq" ":="
   let s := (s.replace "align*" "align").replace "equation*" "equation"
   let s := (s.replace "gather*" "gather").replace "multline*" "multline"

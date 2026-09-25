@@ -383,6 +383,8 @@ def commandRewrites : List (String × String) :=
     ("\\\\bmod\\b", "\\;\\mathrm{mod}\\;"),
     ("\\\\pmod\\{([^}]*)\\}", "\\;(\\mathrm{mod}\\;"),
     ("\\\\not=", "\\neq"),
+    ("\\\\[lr]Vert\\b", "\\Vert"),
+    ("\\\\[lr]vert\\b", "\\vert"),
     ("\\\\(?:big|Big|bigg|Bigg)[lrm]?\\s*(?=[\\\\(\\[\\]){}|.<>/])", ""),
     ("\\\\coloneqq\\b", ":="),
     ("\\\\(begin|end)\\{(align|equation|gather|multline)\\*\\}", "\\$1{$2}"),
@@ -645,14 +647,15 @@ theorem registered_symbols_distinct :
     (registeredRelations ++ registeredArrows ++ registeredOrdinary ++ registeredBigOperators
       ++ registeredBinary).Nodup := by decide
 
-/-- **C-07.2 (b)** — the twelve command rewrites, in the spec's order; the order is normative, so
-this lemma pins the sequence: `\operatorname*?{` first, `\not=` before the size commands, and the
-environment rewrites last. -/
+/-- **C-07.2 (b)** — the fourteen command rewrites, in the spec's order; the order is normative, so
+this lemma pins the sequence: `\operatorname*?{` first, `\not=` before the vertical-bar and size
+commands, and the environment rewrites last. -/
 theorem command_rewrites_order :
-    commandRewrites.length = 12 ∧
+    commandRewrites.length = 14 ∧
     commandRewrites.map (·.1) =
       [ "\\\\operatorname\\*?\\{", "\\\\[dt]frac\\b", "\\\\boldsymbol\\b", "\\\\bmod\\b",
-        "\\\\pmod\\{([^}]*)\\}", "\\\\not=", "\\\\(?:big|Big|bigg|Bigg)[lrm]?\\s*(?=[\\\\(\\[\\]){}|.<>/])",
+        "\\\\pmod\\{([^}]*)\\}", "\\\\not=", "\\\\[lr]Vert\\b", "\\\\[lr]vert\\b",
+        "\\\\(?:big|Big|bigg|Bigg)[lrm]?\\s*(?=[\\\\(\\[\\]){}|.<>/])",
         "\\\\coloneqq\\b", "\\\\(begin|end)\\{(align|equation|gather|multline)\\*\\}",
         "\\\\(begin|end)\\{align\\}", "\\\\(begin|end)\\{multline\\}", "\\\\(begin|end)\\{equation\\}" ] := by decide
 
