@@ -1,0 +1,6 @@
+name = "mdv6_proof"
+version = "0.1.0"
+defaultTargets = ["Mdv6Proof"]
+
+[[lean_lib]]
+name = "Mdv6Proof"
