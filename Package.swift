@@ -10,7 +10,9 @@ let package = Package(
         .executable(name: "mdv6", targets: ["mdv6"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/gonzalezreal/swift-markdown-ui", from: "2.0.2"),
+        // MarkdownUI is vendored (Vendor/MarkdownUI, I-016, D-49); its own dependencies still come from the network.
+        .package(url: "https://github.com/swiftlang/swift-cmark", from: "0.4.0"),
+        .package(url: "https://github.com/gonzalezreal/NetworkImage", from: "6.0.0"),
         .package(url: "https://github.com/ChimeHQ/SwiftTreeSitter", from: "0.8.0"),
         .package(url: "https://github.com/lukilabs/beautiful-mermaid-swift", from: "1.0.4"),
         .package(path: "Vendor/SwiftMath"),
@@ -38,7 +40,7 @@ let package = Package(
         .target(
             name: "mdv6Core",
             dependencies: [
-                .product(name: "MarkdownUI", package: "swift-markdown-ui"),
+                "MarkdownUI",
                 .product(name: "SwiftTreeSitter", package: "SwiftTreeSitter"),
                 .product(name: "BeautifulMermaid", package: "beautiful-mermaid-swift"),
                 .product(name: "SwiftMath", package: "SwiftMath"),
@@ -54,6 +56,16 @@ let package = Package(
             ],
             linkerSettings: [.linkedLibrary("sqlite3")]
         ),
+        // Vendored gonzalezreal/swift-markdown-ui v2.4.1 with the changes Vendor/MarkdownUI/README.md lists (I-016).
+        .target(
+            name: "MarkdownUI",
+            dependencies: [
+                .product(name: "cmark-gfm", package: "swift-cmark"),
+                .product(name: "cmark-gfm-extensions", package: "swift-cmark"),
+                .product(name: "NetworkImage", package: "NetworkImage"),
+            ],
+            path: "Vendor/MarkdownUI/Sources/MarkdownUI"
+        ),
         // Thin executable (§9.0): App/main.swift only.
         .executableTarget(
             name: "mdv6",
@@ -67,7 +79,7 @@ let package = Package(
         ),
         .testTarget(
             name: "mdv6RenderTests",
-            dependencies: ["mdv6Core"],
+            dependencies: ["mdv6Core", "MarkdownUI"],
             path: "Tests/mdv6RenderTests"
         ),
     ]
