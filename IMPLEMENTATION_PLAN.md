@@ -1,4 +1,4 @@
-# Implementation plan — mdv6 (implementing `SPEC.md` v0.12.1)
+# Implementation plan — mdv6 (implementing `SPEC.md` v0.12.1; amended for v0.14.4 in Part II)
 
 > - **Target:** the `mdv6.app` macOS bundle (SwiftUI + AppKit), its `bin/mdv6` launcher, the `make` targets, the `swift test` suite and the `tools/render-harness` package, satisfying `SPEC.md` v0.12.1 (sha256 `16c9d43727e15c959c7c8deb802160b508d6588364042b7aacf879251c61d4da`, measured with `shasum -a 256` on 2026-09-19) and `TYPOGRAPHY.md` (sha256 `e3a6b1a4882106f26dc9a9dfe5f34ed6a5f41e4e62a60f16edf08cd0d28e52ad`). W0..W7 implemented `SPEC.md` v0.11/v0.11.2; W8 covers the v0.12 addition — line citations (C-19) and the C-02 rule 8 source-line map — re-planned after `SPEC_REVIEW_REPORT.md` (F-126..F-138) was applied as v0.12.1.
 > - **Size expectation:** the spec states none. This plan budgets **7,000–9,500 production code lines** (~55 files, comments and blanks excluded, vendored code excluded) plus 3,000–4,500 test lines and 600–900 non-source lines (`build.sh`, `Makefile`, `bin/mdv6`, `Info.plist`, CI workflow, manifest, `tools/speccheck.sh`).
@@ -103,3 +103,299 @@ Anchors: the smallest complete build of v0.8 (5.4k / 41 files, skill record) is 
 **Fork — release provenance gates that this host cannot run (T-43, and Phase B's judge): build the full `make dist` chain and the Phase B invocation as specified, run every gate that *can* run here (T-02 negative gate, `make -n dist`, Phase A, Phase B through OpenRouter `openai/gpt-4o-mini`), and record T-43 as *verification pending: no Developer ID identity, notary profile or tag on this host* — recommended — rather than blocking the build until a signing identity and a tagged release checkout are supplied.** Rationale: T-43 proves only the signing/notarisation half of R-34/K-11; the exact-tag gate, the artefact naming and the target chain are all verifiable without credentials, and a pending row is honest where a fabricated one is not. The alternative — pausing W0 until `TEAM_ID`, `CERT_NAME` and `NOTARY_PROFILE` are supplied and a `v1.2.3` tag exists — costs the whole build's schedule for one row, and the row can be closed later by re-running `make dist` on a tagged checkout with the credentials, with no code change. In both branches the ordering, the budgets and the §6 rules are unchanged; only the T-43 row's status in the report differs.
 
 **Next concrete action:** W8 — add `ParsedDocument.split`/`blockLines`/`lineCount`, `LineCitation`, and the citation dispatch in `DocumentSession.handleLink` test-first per `DETAILED_IMPLEMENTATION_PLAN_W8.md`; done looks like `swift test` green, `speccheck … --judge mock --strict` with 0 uncited among C-19/E-31/T-49/T-50 and 0 dangling/stale, the `test-docs/links-sibling.md` flash seen on screen — then `git commit -m "feat(mdv6): W8 — line citations"`.
+
+---
+
+# Part II — the v0.14 delta (W10–W15), planned against `SPEC.md` v0.14.4
+
+> - **Target:** the rows `SPEC.md` v0.14.4 §11 marks *not yet realised* for this tree — R-44…R-51, C-20…C-22 (with the sub-contracts C-05.1, C-06.4, C-06.5, C-09.1), I-016…I-018, K-17…K-19, E-32…E-38, T-52…T-62 — and the v0.14.x amendments to already-realised rows (R-01, R-04, R-06, R-08, R-09, R-10, R-11, R-16, R-24, R-26, R-27, R-28, R-34, R-35, C-01, C-02 rule 9, C-04, C-06.1 rule 0, C-12 step 0, C-13, C-17, I-001, I-003, E-02, E-26, K-07, §3.1, §5.1). `SPEC.md` sha256 `2c193583d1f807d7e73310263e67deed22eb7f8808b49102f11e2b727ad59fdc`, `TYPOGRAPHY.md` sha256 `e3a6b1a4882106f26dc9a9dfe5f34ed6a5f41e4e62a60f16edf08cd0d28e52ad` (both `shasum -a 256`, 2026-09-27); `reference/ORIGINAL-{FRONTMATTER,GANTT,DIFF,RAW-HTML-IMAGES,PRINT-MATH}.png` as the spec ships them.
+> - **Size expectation:** the spec states none. This part budgets **1,900–2,900 production code lines** (~12 new files, ~14 edited; vendored MarkdownUI excluded) plus 1,000–1,600 test lines and 60–120 non-source lines (`build.sh`, `Package.swift`, `.gitignore`, `render-cases.json`).
+> - **Method:** unchanged from Part I — red-green-refactor over the §9 groups, one wave at a time, apparatus before the feature it guards, `SPEC.md` never edited by a wave (a spec defect found while building becomes an `F-nnn` in `SPEC_BUILD_REPORT.md` and a separate `fix(spec):` commit).
+
+## II.1 Verdict
+
+The delta lands as six waves on the existing `mdv6Core` shape, with no new target except the vendored `MarkdownUI` (I-016 requires it; D-49). The order is:
+
+- **W10:** pure contracts first — the frontmatter span and rows, C-02 rule 9 and the BOM strip, the C-05.1 diff classifier, the C-06.4 dispatch and C-06.1 rule 0, the C-22.1 rewrite and C-22.2 size function, C-12 step 0, the C-09.1 style table, and the K-18, R-48 and C-21.1 formulas as functions. Every later wave is measured against these.
+- **W11:** the vendored MarkdownUI with its one patch, then the renderers that need no session — diff tint, `mdv6-img` block and inline providers, the properties table, find typography.
+- **W12:** the session and window commands — R-44's block-0 rules, Close File / Window / All, Next / Previous File, keyboard scrolling, frontmost-window routing, the zero-window state.
+- **W13:** the Mermaid web path behind its trust boundary.
+- **W14:** printing, with its harness oracle landing first inside the wave.
+- **W15:** the observed pass against the five `ORIGINAL-*` references, the README and Help rewrite, the §11 walk and the report.
+
+Three decisions carry the plan:
+
+- **(a)** Every parser-shaped rule is a pure function with a unit test before any view calls it, so T-52/T-54/T-58/T-59/T-60's unit halves gate W10 and the views in W11–W14 only compose them.
+- **(b)** The web renderer's trust boundary — load refusal, `securityLevel: 'strict'`, `logLevel: 'fatal'`, the SHA-pinned script — lands in the same wave as, and before, the view that loads the page (I-001, I-003).
+- **(c)** Print is verified through the harness (`--print-pdf` with per-block JSON) and not through the print panel, so T-53's eight scripted assertions are the oracle and the panel is the observed half.
+
+The plan refuses to:
+
+- copy the original's source (the spec's *Sources* line: "none of the original's source is used");
+- treat the manual halves of T-52…T-61 as done without the W15 look;
+- change C-18.7's no-stripe-on-fences rule (D-54 is unconfirmed).
+
+Expected landing: ~2,300 production code lines. The shortcut that fits in ~1,400 drops the print pipeline's inline-formula overlay (C-21.4) and the web view's host integration (C-06.5) — exactly the two clauses the eighth and ninth reviews had to add; they are not dropped.
+
+## II.2 What the evidence says
+
+| Build | Prod code lines / files (this delta's features only) | Shape | What ended it |
+|---|---|---|---|
+| the original at `68aa008` (`tqbf/mdv`) | 1,735 in 7 new files (`grep -cv '^\s*$\|^\s*//'`: `PrintController` 741, `MermaidWebRenderer` 346, `Frontmatter` 223, `RawHTMLImages` 162, `FrontmatterView` 90, `DiffHighlighter` 89, `ScrollKeyMonitor` 84) + ~520 in edits (`git diff --numstat c1577a6..68aa008`: 872 lines added to `ContentView`, `mdvApp`, `ThemeManager`, `MathRenderer`, `MermaidRenderer`, `CodeRenderer`, roughly 60 % code) ≈ **2,250**; vendored MarkdownUI 7,756 raw lines | features grafted onto one 3,600-line `ContentView` | shipped; the spec reviews found a privacy hole (inline remote `<img>` fetched outside the gate, D-51), an unaddressed Close All (D-50), flat print rhythm (F-160), and a TEMP self-test hook left in the product |
+| this tree at `655f86e` | 5,949 in 53 files under `mdv6/Core` + `App`; 3,160 test lines; 173 tests | `mdv6Core` library, thin app, harness package | green: `swift test` 173/0; speccheck Phase A `175/210`, the 35 uncited ids exactly the v0.14 set |
+
+**Measured starting state.** `swift build` 10.6 s and `swift test --parallel` 41.8 s on this host. `speccheck 1.20.0`. No `Vendor/MarkdownUI`, and `mdv6/mermaid.min.js` absent. `mdv6/mermaid.LICENSE.txt` is present (v0.14.2). `mdv6AppDelegate.applicationShouldTerminateAfterLastWindowClosed` returns `true`, which R-47 and E-38 contradict.
+
+**A stale spec row.** §11, and the new *Status* line, still mark C-19/E-31/T-49/T-50 *not yet realised*, but W8 (`e61c60f`) built them and speccheck reports them `PASSING`. This is a spec defect for W15's `fix(spec):` commit, not work.
+
+The systemic failure modes are the Part I set, plus two the reviews of this very delta exposed:
+
+- **(4)** A rule added in one place whose reach nobody checked. F-153, F-173 and F-174 were all "a new clause overrides a row that does not know". A wave that edits a function must grep for every row citing it.
+- **(5)** A test oracle written without running it on its fixture: F-175 and F-176.
+
+## II.3 Shape
+
+```mermaid
+flowchart LR
+  App["App/main.swift"] --> Core["mdv6Core"]
+  Core --> MUI["MarkdownUI (Vendor/MarkdownUI, 2.4.1 + 1 patch)"]
+  MUI --> CM["swift-cmark (cmark-gfm)"]
+  MUI --> NI["NetworkImage"]
+  Core --> WK["WebKit (system)"]
+  Core --> STS["SwiftTreeSitter"]
+  Core --> CG["CGrammars"]
+  Core --> BM["BeautifulMermaid"]
+  Core --> SM["SwiftMath (Vendor)"]
+  RH["tools/render-harness"] --> Core
+```
+
+*Figure II.3 — the target graph after W11: `MarkdownUI` moves from a package product to a vendored target (I-016, D-49), and WebKit joins for R-46.*
+
+**New files** (named as §11's v0.14 rows name them):
+
+| File | Contents | Wave |
+|---|---|---|
+| `mdv6/Core/Frontmatter.swift` | `frontmatterSpan`, `frontmatterRows`, `FrontmatterRow` (C-20.1/.2) | W10 |
+| `mdv6/Core/FrontmatterTableView.swift` | C-20.3 | W11 |
+| `mdv6/Core/DiffHighlighter.swift` | C-05.1 classify + render | W10 classify, W11 render |
+| `mdv6/Core/MermaidDispatch.swift` | C-06.4 | W10 |
+| `mdv6/Core/RawHTMLImages.swift` | C-22.1, `HTMLImageSpec`, C-22.2 size | W10 |
+| `mdv6/Core/FindBlockStyle.swift` | C-09.1 | W10 |
+| `mdv6/Core/ScrollKeys.swift` | K-18 step math W10, `ScrollKeyMonitor` W12 | W10, W12 |
+| `mdv6/Core/MermaidWebView.swift` | C-06.5 on screen, `MermaidWebRenderer` for print | W13 |
+| `mdv6/Core/PrintController.swift` | C-21 | W14 |
+| `Vendor/MarkdownUI/**` | upstream `Sources/MarkdownUI` + patch + `README.md` | W11 |
+
+The **layer direction** is unchanged. The new contracts sit in the contract layer. `MermaidWebView` and `FrontmatterTableView` are views. `PrintController` sits beside `DocumentRenderer` in the harness layer, because the harness calls it and the app calls it the same way (R-39 "links, never copies").
+
+**Headless rule** (Part I, unchanged):
+
+- The print type scale, diagram widths and densities are `static let`s named after the spec symbols ($s_p$, $w_d$, $w_\ell$).
+- `PrintController` takes the paper size, theme and preferences as parameters, never reading the screen (I-017).
+- The web renderer takes the theme and source only.
+
+**Visual oracle.**
+
+- The five `reference/ORIGINAL-*.png` images, as structure (§9.7).
+- The measured checks: C-22.2 sizes in points from the harness render of `raw-html-images.md`; C-05.1 colours sampled from the render of `diff.md` against the hex table; T-53's per-block JSON (vector text on `rhythm.md`, no image in an accepted formula's rect, one page per short block, the rhythm gap $s_p \cdot v$ within 1 pt).
+- The person's look in W15.
+
+## II.4 Order
+
+**W10 — v0.14 pure contracts.**
+
+*Contents:*
+- `Frontmatter.swift` (C-20.1 recognition with the zero-row rule, C-20.2 rows);
+- `ParsedDocument` rule 9 (block 0, `blockLines` in whole-document lines, `frontmatter` field);
+- R-04's leading-U+FEFF strip in `DocumentSession.readDocument`'s decode helper;
+- `DiffHighlighter.classify` (C-05.1);
+- `MermaidDispatch` (C-06.4) and C-06.1 rule 0 in `MDVMermaidPipeline.sanitize`;
+- `RawHTMLImages.rewrite` / `HTMLImageSpec` / `displaySize` (C-22.1/.2);
+- `stripInlineMarkdown` step (0) (C-12);
+- `FindBlockStyle` (C-09.1);
+- `ScrollKeys.target` (K-18);
+- `HistoryStep.target` (R-48, clamp, no wrap);
+- `PrintScale` ($s_p$, $w_d$, $w_\ell$ — C-21.1/C-21.3).
+
+*Gate:* `swift test --filter "FrontmatterTests|DiffClassifyTests|MermaidDispatchTests|RawHTMLImagesTests|FindStyleTests|V014FormulaTests|SplitTests|TypographyTests|MermaidSanitizeTests"` exits 0, with every existing test still green.
+
+*Discharges (unit halves):* T-52, T-54, T-56, T-57, T-58, T-59, T-60. *Fully:* C-02 rule 9, C-12 step (0), E-32, E-35 (rewrite clauses), I-018 (split half).
+
+*This wave is here because four reviews found that the v0.14 rules interact. Only pure functions with tests let the later waves compose them without re-deriving the interactions.*
+
+**W11 — vendored MarkdownUI and the block renderers.**
+
+*Contents:*
+- **`Vendor/MarkdownUI`:** upstream `Sources/MarkdownUI` from the resolved 2.4.1 checkout (verify revision `5f613358…`). Add the `markdownResolvedInlineImages(_:)` environment hook and a `README.md` patch inventory, both written from the spec's description (I-016, D-49). Declare the target in the root `Package.swift` with swift-cmark and NetworkImage as package dependencies.
+- **`CodePalette`:** gains `diffAdd`, `diffAddBg`, `diffRemove`, `diffRemoveBg`, with the C-05.1 table per theme.
+- **`CodeRenderer`:** the diff route, a diff flag in the cache key, and the R-08 exception (R-50).
+- **`ImageProviders`:**
+  - the `mdv6-img` scheme on the block path (C-22.2 caps, `alt`, missing-file text);
+  - an inline image provider that loads local and `data:` images against the document directory;
+  - C-16 for inline remote images;
+  - the inline *Remote image blocked* / *Image failed to load* text images (R-16, C-22.2);
+  - baseline placement for non-math inline images.
+- **`FrontmatterTableView`:** C-20.3.
+- **`ArticleBlockView`:**
+  - block 0 renders the table or nothing (R-44 view half), taking no height, padding or spacing when hidden;
+  - the §3.2 order `<img>` → math → smart typography;
+  - C-09.1 find typography;
+  - R-24's verbatim header path.
+
+*Gate:*
+1. `swift test --filter "CodeRendererTests|ImageLoadingTests|ArticleTests|VendorMarkdownUITests"` exits 0.
+2. `swift run --package-path tools/render-harness render-harness test-docs/raw-html-images.md --output "$TMPDIR/raw.png"` exits 0, and the C-22.2 sizes are measured in `ArticleTests`.
+3. `diff -r` against the pristine checkout shows only the inventoried files (T-62).
+
+*Discharges:* R-50, R-51 (render), R-16 amendment, R-08 amendment, C-05.1 render, C-09.1, C-20.3, C-22.2, I-016, T-62. *Halves of:* T-52, T-58, T-59, T-60.
+
+**W12 — session and window commands.**
+
+*Contents:* all in `DocumentSession`, `AppModel`, `mdv6App`, `DocumentRootView`, `WindowAccessor` and `Preferences`.
+
+- **Preferences (C-04):** `mdv6_show_frontmatter`, with the View · *Show Frontmatter* toggle.
+- **R-44 session rules:** the hidden header is not an anchor; a block-0 bookmark or placeholder is titled `Frontmatter`; a header-only document beeps on ⌘D and ⌘⇧0. Carried into `BookmarkTitle` and the R-27/R-28 anchor selection.
+- **R-47:**
+  - `closeFile` goes through the delete path without persisting a scroll position (R-06 exception) and without pushing a snapshot;
+  - *Close Window* replaces the system Close;
+  - *Close All* shows its confirmation dialog, cancels in-flight loads, and puts every session into `EMPTY` (E-36, E-26 exception).
+- **R-48:** *Next File* / *Previous File*, their enablement, and ⌃⇥ / ⌃⇧⇥ through a local key monitor that consumes only Control-Tab.
+- **R-49:** `ScrollKeyMonitor` over the article's enclosing `NSScrollView`, with focus ownership per E-37.
+- **R-01:** the frontmost-document-window target, and background opens (`NSApp.isActive` guard).
+- **R-01 / E-38, the zero-window state:**
+  - `applicationShouldTerminateAfterLastWindowClosed` returns `false`;
+  - a window is created on demand only when the action has a file;
+  - a Dock reopen follows R-40.
+- **§5.1 menu rows**, with their enablement.
+
+*Gate:*
+1. `swift test --filter "SessionTests|ChromeModelTests|PersistenceTests"` exits 0, with a test for each new §3.1 transition and the two-session *Close All* case.
+2. `make` exits 0.
+3. The app is launched on an isolated store, and ⌘W / ⇧⌘W / ⌥⌘W / ⇧⌘] / ↓ / End are driven through `tools/observe.sh`'s drive hook, with snapshots written.
+
+*Discharges:* R-47, R-48, R-49, R-01 / R-06 / R-26 / R-27 / R-28 amendments, C-04, E-26, E-36, E-37, E-38, K-18. *Headless halves of:* T-55, T-56, T-57, T-61, T-52.
+
+**W13 — the Mermaid web path.**
+
+*Contents:*
+
+- **`build.sh`:** fetch `mermaid.min.js` 11.4.1 when absent, verify SHA-256 `a43bc1af…` with a hard fail that names both digests, and copy it and `mermaid.LICENSE.txt` into `Resources/` (C-13, C-01, K-19).
+- **`Package.swift`:** declares `mermaid.min.js` as a resource.
+- **`.gitignore`:** lists `mdv6/mermaid.min.js`.
+- **`MermaidWebView`:** the C-06.5 page — escaping, the background as CSS, `strict`, `logLevel: 'fatal'`, the height report after two animation frames plus `ResizeObserver`, the 0.5 pt filter, the 60 pt spinner. It carries the trust boundary first:
+  - a `WKContentRuleList` that blocks every URL;
+  - a navigation delegate that refuses every navigation except the initial `about:blank` load;
+  - no inspectability.
+
+  Host integration:
+  - the block menu instead of WebKit's;
+  - wheel events forwarded;
+  - no first responder;
+  - no text selection.
+
+  The message handler is removed when the view is dismantled.
+- **The dispatch:**
+  - `MermaidCodeBlockChrome` hides the style menu and export on the web path (R-09);
+  - `MDVMermaidDiagramView` routes by `MermaidDispatch`;
+  - a native failure is not retried on the web (E-02).
+- **The harness:** `--scan` reports `web` (C-17), and `render-cases.json`'s `expect` values are updated.
+
+*Gate:*
+1. `swift test --filter "MermaidTests|MermaidWebTests|HarnessTests"` exits 0. `MermaidWebTests` loads `gantt.md`'s source in an offscreen `WKWebView` and asserts a positive height, and asserts that a page containing an `<img src="http://127.0.0.1:…">` reaches a recording server zero times.
+2. `swift run --package-path tools/render-harness render-harness --scan test-docs/mermaid --output-dir "$TMPDIR/scan"` exits 0, with web cases reported `web`.
+3. `rm mdv6/mermaid.min.js && ./build.sh debug` exits 0, and a corrupted copy exits 1 with both digests printed.
+
+*Discharges:* R-46, C-06.5, K-19, E-34, the R-09/R-10/R-34/R-35/C-01/C-13/C-17/I-001/I-003/E-02/K-07 amendments. *Unit half of:* T-54.
+
+**W14 — printing.**
+
+*Contents:* `PrintController`, built in this order:
+
+1. **The apparatus first:** `PrintController.renderPDF(document:options:)`, returning the paginated PDF data plus per-block records (`index`, `kind`, `page`, `rect`, `images`, `formulas`), and the harness's `--print-pdf` invocation over it (C-17).
+2. **The C-21.1 page:** 54 pt margins, the header and footer on, $s_p$, the fixed print theme, smart typography from the print theme.
+3. **C-21.2:** one `ImageRenderer` vector PDF per block; the gap is $s_p$ times the print theme's screen gap (`ArticleBlockView.blockInset`); code soft-wrapped; no remote fetch.
+4. **C-21.3:** Mermaid through a native PDF, or the web PDF from an offscreen window never ordered front, with the raster fallbacks and the `text` retag.
+5. **C-21.4:**
+   - a standalone `$$` block drawn from SwiftMath's vector image;
+   - an inline formula or picture drawn into a placeholder slot found by the pixel signature;
+   - a rejected span printing its E-10 fallback.
+6. **C-21.5:** `adjustPageHeightNew` with `heightAdjustLimit` 0.9.
+7. **C-21.6:** the frontmatter table or nothing; a sheet on the target window; presentation from a main-queue callout; a second ⌘P beeps.
+8. **The menu:** File · *Print…* ⌘P.
+
+*Gate:*
+1. `swift test --filter PrintTests` exits 0: T-53 (1)–(8) over `rhythm.md`, `math.md`, `syntax.md`, the native `test-docs/mermaid/*.mmd` and `frontmatter.md`.
+2. `swift run --package-path tools/render-harness render-harness test-docs/math.md --print-pdf "$TMPDIR/m.pdf"` exits 0, with one JSON object per block.
+
+*Discharges:* R-45, C-21, I-017, K-17, E-33, and the scripted half of T-53.
+
+**W15 — Prove it.** The live pass (§II.6) comes first, then:
+
+- `README.md` and `mdv6/Help.md` rewritten from the built surface;
+- a `fix(spec):` commit that updates §11 and *Status* for the realised rows, including the stale C-19 marker;
+- the §11 walk from `speccheck.json`;
+- speccheck Phase A and Phase B;
+- `SPEC_BUILD_REPORT.md` with the W10–W15 ledger.
+
+*Gate:* `bash tools/speccheck.sh` exits 0, Phase A at `210/210`, and Phase B is recorded.
+
+## II.5 LOC budget (production code lines; vendored MarkdownUI excluded)
+
+| Slice | Files | LOC |
+|---|---|---|
+| W10 pure contracts (`Frontmatter`, `DiffHighlighter` classify, `MermaidDispatch`, `RawHTMLImages`, `FindBlockStyle`, `ScrollKeys` math, `ParsedDocument`/`Sections`/sanitize edits) | 6 new, 3 edited | 400–550 |
+| W11 renderers (`FrontmatterTableView`, diff render, palettes, image providers, article edits, MarkdownUI patch ≈40) | 1 new, 5 edited | 400–600 |
+| W12 session and commands (`DocumentSession`, `AppModel`, `mdv6App`, `DocumentRootView`, `ScrollKeyMonitor`, `Preferences`, `BookmarkTitle`) | 0–1 new, 7 edited | 350–550 |
+| W13 web path (`MermaidWebView`, dispatch in chrome/diagram view, harness status) | 1 new, 3 edited | 300–450 |
+| W14 print (`PrintController`, harness `--print-pdf`) | 1 new, 2 edited | 450–700 |
+| W15 docs and fixes | — | 0–50 |
+| **Total** | **~10 new, ~14 edited** | **1,900–2,900** |
+| Tests | 7–9 files | 1,000–1,600 |
+| `build.sh`, `Package.swift`, `.gitignore`, `render-cases.json` | — | 60–120 |
+
+**Anchor:** the original's same features at ≈2,250 code lines (§II.2). Its `PrintController` alone is 741 code lines, including a TEMP self-test and a content-stream scanner, so W14's 450–700 assumes the scanner (~90 lines) is kept and the self-test is not. `MermaidWebRenderer` at 346 includes a print path, which W14 owns here. No slice exceeds twice its counterpart there.
+
+The two rules of Part I apply unchanged:
+- **Decompose, don't drop:** if the estimate approaches the ceiling, decompose `PrintController` into page, overlay and container files — never drop a subsystem.
+- **An estimate, not a floor:** landing under the budget loses nothing unless §11 says so.
+
+## II.6 Rules that make the observed failures impossible
+
+| Failure | Structural rule |
+|---|---|
+| (4) A new clause overrides a row that does not know (F-153, F-173, F-174) | Every wave document's §8 lists the rows that cite each function it edits (from `grep -n` over `SPEC.md`), and each wave's tests include one case per such row. `stripInlineMarkdown` step (0) gets a `BookmarkTitle` and TOC case; `ArticleBlockView`'s inline placement gets an inline-math case asserting math keeps R-12's placement. |
+| (5) An oracle written without running it on its fixture (F-175, F-176) | Every scripted assertion is run against its named fixture on the unmodified tree **before** the feature exists, and must fail for the stated reason (red), not because the fixture contradicts the oracle. T-53 (1) uses `rhythm.md`; (2) exempts rejected spans and has (2b). |
+| The original's inline remote `<img>` fetched outside C-16 (D-51) | Every image load goes through `DocumentImageView` / the inline provider, and both call `RemoteImageLoader` for `http(s)`. `ImageLoadingTests` asserts, with the recording server, zero requests for the block and inline `<img>` with the preference off. |
+| A web view that loads more than its page (I-001, I-003, D-46) | The content rule list and navigation delegate are created in `MermaidWebView.makeNSView` before `loadHTMLString`, and `MermaidWebTests` asserts zero requests to a recording server from a diagram with an `<img>` label and a `click` directive. |
+| A TEMP self-test hook left in the product (the original's `MDV_PRINT_TEST`) | Print is exercised only through `PrintController.renderPDF` from the harness and `PrintTests`. No environment-variable hook is added to the app. `grep -rn MDV_PRINT_TEST mdv6` is empty at the W14 gate. |
+| The app quits when its last window closes, contradicting R-47 / E-38 | The W12 gate includes a `SessionTests` case over `mdv6AppDelegate.applicationShouldTerminateAfterLastWindowClosed == false`, plus the zero-window drive in W15. |
+| A reference image the build did not produce is the only visual oracle for the v0.14 surfaces | W15 compares the running product against `reference/ORIGINAL-*.png` pane by pane, and records each comparison. Harness renders written during W11–W14 are regression guards only. |
+
+**Live verification (W15).** These observed clauses need the running product:
+
+- T-52: table, hide and show, find in a hidden header.
+- T-53 (manual half): panel, preview, Save as PDF.
+- T-54: web diagrams on screen, right-click menu, wheel, focus, VoiceOver label.
+- T-55: the Close dialog, two windows.
+- T-56: ⌃⇥.
+- T-57: keyboard scrolling to the true top and bottom.
+- T-58: colours.
+- T-59: sizes and baseline.
+- T-60: find typography.
+- T-61: `open -g`, zero-window reopen.
+
+Commands:
+1. `make`.
+2. `tools/observe.sh <name> <file> [--theme ID]` on an isolated store, with the drive hook for keystrokes.
+3. `screencapture -l` into `build/observed/`, opened by a person.
+4. For T-53, `open` the saved PDF.
+
+- **Prerequisites.** An unlocked Aqua console (`launchctl managername` prints `Aqua`); screen-recording permission (the v0.14.2 references were captured on this host with `screencapture -l`, so it is present); Accessibility is **absent** (AppleScript window resize was refused on 2026-09-27), so key events are driven through the app's existing `WindowAccessor` drive hook, not through System Events. The print panel needs a person, or the drive hook's `runModal` bypass.
+- **Stand-ins.** The print panel falls back to `PrintController.renderPDF` output opened by a person (covers the preview and type-scale clauses, not the panel's paper menu). `open -g` activation is covered by `NSApp.isActive` logged by the drive hook. VoiceOver is covered by the accessibility element dump (`NSAccessibility` attributes of the web block).
+- **The downgrade rule.** Any observed clause not reached stays *verification pending* and the verdict is `VERIFICATION PENDING`, never `PASS`.
+
+## II.7 One fork, then action
+
+**Fork — may W13 and W14 read the original's implementation (`../mdv` at `68aa008`) while building, or only the spec and the original as a black box? Recommended: spec and black box only** — the spec's *Sources* line states that "this repository is a from-scratch rebuild against this specification; none of the original's source is used", every behaviour W13/W14 need is pinned in C-06.5 and C-21 (written from that source and reviewed twice), and the original is still available to *run* for comparison, as the v0.14.2 references were. The alternative, reading the source, would likely shorten W13–W14 (the hard parts — the height handshake, the content-stream scanner, the offscreen-window rules — are solved there), but it would falsify the *Sources* line, and a reviewer could no longer tell whether a behaviour came from the spec or from copied code. In both branches the order, the budgets and the §II.6 rules are unchanged. If you choose the alternative, W15's `fix(spec):` must reword the *Sources* line.
+
+**Next concrete action:** W10 — per `DETAILED_IMPLEMENTATION_PLAN_W10.md`, write `Tests/mdv6Tests/FrontmatterTests.swift` first, with the C-20.1 accept and reject cases (including E-32's zero-row `---`/`# Title`/`---`), and watch it fail to compile for the missing `frontmatterSpan`. Done looks like the W10 gate command exiting 0 and `git commit -m "feat(mdv6): W10 — v0.14 pure contracts"`.
