@@ -1,586 +1,766 @@
 # Specification Review Report
 
-> **Reviewed document:** `SPEC.md`, v0.12 (2026-09-19), 955 lines, as committed in `ff8cde7`. Line numbers below are that revision's; v0.12.1 applied every finding and renumbered the file.
-> **Review:** seventh review; finding ids continue from F-125 (the sixth review, F-114..F-125, is recorded in the document's revision history).
-> **Scope of this review:** the whole specification. The v0.12 delta (C-19, C-02 rule 8, the R-19/E-06/T-22/T-49 edits, D-44, the §11 rows) is audited clause by clause, because it is the newest and least-reviewed material; the rest is re-checked for consistency with it.
-> **Method:** the four passes of the review method — comprehension, local precision, cross-consistency, implementation simulation — plus the mechanical id walk (`tools/speccheck.sh` / `speccheck check`, which reports `0 dangling, 0 stale`; its `3 uncited` are the three unrealised v0.12 ids).
+> **Reviewed document:** `SPEC.md`, v0.14 (2026-09-27), 1179 lines, as committed in `7b6c373`. Line numbers below are that revision's.
+> **Review:** eighth review; finding ids continue from F-148 (the last finding recorded in the document's revision history).
+> **Scope of this review:** the whole specification, with the v0.14 delta audited clause by clause — R-44…R-51, C-05.1, C-06.4, C-06.5, C-09.1, C-20…C-22, I-016…I-018, K-17…K-19, E-32…E-37, T-52…T-62, D-46…D-53, and the amendments to R-01, R-09, R-10, R-16, R-24, R-26, R-34, C-02 rule 9, C-04, C-13, C-17, I-001, I-003, E-02, §3.1 and §3.2. The pre-v0.14 material is re-checked only for consistency with the delta.
+> **Method:** the four passes of the review method (comprehension, local precision, cross-consistency, implementation simulation), plus a mechanical id walk: every id referenced in the document is declared, and v0.14 introduced no duplicate declaration. Two claims were checked against evidence outside the document: that the vendored library's parser drops `%%`-prefixed lines (it does; `.build/checkouts/beautiful-mermaid-swift/Sources/BeautifulMermaidSwift/Parser.swift:14`), and that `high-contrast`'s `articleMaxWidth` is the 860 pt default (it is; `mdv6/Core/ThemeManager.swift:90`).
 
 ---
 
 ## 1. Executive Summary
 
-**Overall maturity: Level 3 (implementation-grade).** The pre-v0.12 document meets the readiness bar: an implementer can build it and a verifier can test it, with almost no semantic inference left. The v0.12 addition is **not** at that bar. It introduces a direct normative contradiction, an internal grammar/behaviour mismatch, and a test whose fixture makes its own stated expectation false.
+**Overall maturity: Level 3 (implementation-grade) for the pre-v0.14 document; the v0.14 delta is Level 2.** The v0.14 additions are detailed and mostly precise. The pure contracts in particular are specified tightly enough to unit-test: C-05.1's diff classifier, C-06.4's dispatch, C-20's recognition and row reduction, and C-22's rewrite and size function. The weaknesses are at the **seams**, where the new features meet rules written before they existed:
 
-**Implementation readiness:** `READY WITH MINOR FIXES` for the system as a whole; `NOT READY` for C-19 until F-126, F-128 and F-129 are resolved.
+- the window-routing rule, which assumes a document window exists;
+- the find, bookmark and rhythm rules, which assume every block draws something;
+- R-08, which says every unknown fence is plain;
+- R-06, which says every file switch persists a position;
+- the web view, which brings its own context menu, scroll handling and first responder into a surface specified as all-native.
 
-**Findings:** 13 — 1 CRITICAL, 3 HIGH, 5 MEDIUM, 4 LOW. Twelve of the thirteen are in material new in v0.12; the document's pre-existing content produced no new defect of HIGH severity or above.
+**Implementation readiness:** `READY WITH MINOR FIXES` for the pre-v0.14 system. `NOT READY` for the v0.14 rows until F-149 and F-151 are resolved.
+
+**Findings:** 24 in total: 0 CRITICAL, 2 HIGH, 13 MEDIUM, 9 LOW. All are in, or caused by, the v0.14 delta.
 
 **Most important strengths**
 
-- The traceability chain (intent → requirement → contract → invariant → test → evidence) is complete and machine-checked; ids resolve with no dangling references.
-- Normative numbers are stated as formulas with defined symbols and pinned degenerate cases (§7.1 ink, §7.2 column width, K-16 rhythm band), and the tests cite the formulas rather than a golden produced by the implementation.
-- The rendered surface is specified as behaviour, not delegated: §5.5/C-18 gives region layout, element inventory, per-element states, metrics (K-16) and reference images, with a §9.6 rule that a conformance report without an observed test is *verification pending*. This is the exception that most specs of this shape get wrong.
-- Oracle independence holds for the visual surface: T-44/T-45/T-46 compare against a reference image or a measured quantity the spec states, not against the build's own prior output.
+- The new pure functions are specified as algorithms, not as examples. An implementer can write `frontmatterSpan`, `frontmatterRows`, the C-05.1 classifier, the C-06.4 dispatcher and `RawHTMLImages.rewrite` from the text alone, and T-52/T-54/T-58/T-59 name unit cases for each.
+- The trust-boundary change is handled honestly. The *Principle*, §0, I-001 and I-003 are amended rather than silently contradicted. D-46 records the exception, and it is **tighter** than the original: every non-page load is refused.
+- Departures from the original are deliberate and recorded: D-50 (*Close All* empties every window) and D-51 (inline remote `<img>` is gated). Neither is presented as as-built behaviour.
+- The status discipline holds. Every new id is marked *not yet realised*, and §11's opening sentence enumerates them. The previous review had to fix exactly this (F-132).
 
 **Most important weaknesses**
 
-- **The v0.12 fragment work did not propagate to the rows that already used the word "fragment."** R-18, R-21/C-18.8, E-22 and E-29 speak of "a `#fragment` link" with one meaning; C-19 makes the term cover two kinds with different effects. The result is one unsatisfiable pair of `MUST`s (F-126) and a family of ambiguous ones (F-127).
-- **C-19.1's grammar and its prose disagree about `#L0`**, and the disagreement changes the observable result from "nothing happens" to "scroll to the end of the document and flash" (F-128).
-- **T-49 is written against a fixture that does not produce the state it asserts** — the cited line is a blank line, so the citation resolves to the heading above it, not to "the paragraph containing line 10" (F-129). This is exactly the class of error the spec's own review culture (F-107, the ink-row/margin discovery) is designed to catch: an expectation asserted without measuring the fixture.
-- **The three new ids carry no status marker.** The document's stated discipline marks specified-but-unbuilt work; §11's note still reads "At v0.11 every row is plain" (F-132).
-
----
+- **No rule covers the state with zero document windows** (F-149). ⇧⌘W and the window close button can both produce it, and R-01's target-window definition then names nothing.
+- **The web view's own interaction surface is unspecified** (F-151). R-09's block context menu, R-49's keyboard scrolling and the article's wheel scrolling all meet a `WKWebView` that, by default, answers these events itself.
+- **Frontmatter is a block that may draw nothing, and several rules assume otherwise** (F-158, F-159). This affects the bookmark title, the topmost-visible anchor, the flash, the stripe, find's tint and the rhythm band.
+- **Several pairs of `MUST`s now disagree**: R-08 vs R-50 (F-153), R-06 vs R-47 (F-154), E-26 vs *Close All* (F-155), and C-22.2 with itself (F-157).
 
 ## 2. Overall Maturity
 
-**Level 3 — Implementation-grade.**
+**Level 3 for the document as a whole, held back from READY by the v0.14 delta.** The pre-v0.14 document keeps its implementation-grade status: none of the findings below changes a pre-v0.14 behaviour, except where a v0.14 row now contradicts it (F-153, F-154, F-155, F-156).
 
-A competent coding agent can implement the pre-v0.12 specification with minimal semantic inference, and conformance is objectively testable for the major surfaces (scripted build/launcher/render/Mermaid/persistence tests plus observed chrome tests against reference images). It is not Level 4: verification is not mechanically closed end-to-end — several acceptance criteria are manual by design, and the newest feature is currently self-contradictory. It is well above Level 2: the ambiguities that remain are localized and enumerated below rather than pervasive.
-
----
+The delta is Level 2: implementable, but with two blocking semantic gaps (F-149, F-151) and a cluster of cross-rule contradictions. Each is a one- or two-clause fix. No redesign is indicated.
 
 ## 3. Findings Summary
 
-| ID | Severity | Location | One-line summary |
-| -- | -------- | -------- | ---------------- |
-| F-126 | CRITICAL | R-18 vs R-19 / C-19.4 | Two `MUST`s disagree on whether a same-document line-citation jump pushes a back snapshot. |
-| F-127 | HIGH | C-19.1, C-19.4 vs E-22, E-29, C-18.8, R-18 | "Fragment" now covers two kinds with different effects; four existing rows are ambiguous. |
-| F-128 | HIGH | C-19.1 vs C-19.1 prose, E-06, E-31 | The grammar accepts `#L0`; the prose and edge rows reject it — divergent observable behaviour. |
-| F-129 | HIGH | T-49 vs `test-docs/links-sibling.md` | The cited line 10 is blank; the citation resolves to the heading, not the paragraph the test asserts. |
-| F-130 | MEDIUM | C-02 rule 8, C-19.3, E-31 | Resolution undefined for a line preceding the first block (leading blank lines). |
-| F-131 | MEDIUM | C-02 `ParsedDocument`, rule 8 | `blockLines` boundary convention (inclusive vs exclusive) is stated three ways. |
-| F-132 | MEDIUM | §11 note, C-19/E-31/T-49 rows | New unrealised ids carry no *not yet realised* marker; §11's blanket note hides it. |
-| F-133 | MEDIUM | C-19 scope vs R-19 classification | Citations into non-Markdown files never reach C-19; the canonical `Foo.swift#L412-L418` case silently falls to the system opener. |
-| F-134 | MEDIUM | §9.4, §9.6 | T-49's scripted assertions sit in a manual group; its visual flash is absent from the §9.6 observed set. |
-| F-135 | LOW | K-06 | The 0.6 s constant is labelled "Heading-copy flash"; C-19 gives it a second use. |
-| F-136 | LOW | §5.5 | C-19 is placed inside the section titled "Window chrome". |
-| F-137 | LOW | C-19.3, D-44 | "exactly as a TOC row does" is misleading; D-44's *Affects* column omits the rows it forces to change. |
-| F-138 | LOW | T-49 | The fixture for the "document with no blocks" assertion is not named. |
-
----
+| ID | Severity | Location | Title |
+| -- | -------- | -------- | ----- |
+| F-149 | HIGH | R-01, R-47, §3.1, E-30 | No rule for the state with zero document windows |
+| F-151 | HIGH | R-09, R-46, R-49, C-06.5 | The web view's context menu, scroll, focus and selection are unspecified |
+| F-150 | MEDIUM | C-20.1, E-32, D-48 | The YAML guard accepts an ATX heading as a comment and swallows a title |
+| F-152 | MEDIUM | C-06.4, C-06.1, E-02, T-54 | A multi-line `%%{…}%%` directive dispatches native and then fails |
+| F-153 | MEDIUM | R-08, R-50 | R-08 requires a `diff` fence to be plain; R-50 requires it tinted |
+| F-154 | MEDIUM | R-06, R-47, §3.1 | R-06 persists a position on every file switch; R-47 forbids it on close |
+| F-155 | MEDIUM | E-26, R-47, E-36 | E-26 says only the key window acts; *Close All* acts in every window |
+| F-156 | MEDIUM | R-11, K-07, I-005, R-46 | The raster-width and zoom rules say "a diagram" without excluding the web path |
+| F-157 | MEDIUM | R-16, C-22.2 | The inline blocked-remote `<img>` placeholder is required and ruled out in the same row |
+| F-158 | MEDIUM | R-44, R-27, C-18.7, C-19.3, I-014 | Block 0 as a header: anchoring, title, flash, stripe, selection and spacing are unstated |
+| F-159 | MEDIUM | R-24, R-44 | Find on a header can take the whole-block tint, which draws nothing when hidden |
+| F-160 | MEDIUM | C-21.2, I-014, C-18.10 | Print does not say whether block-boundary rhythm is re-applied |
+| F-161 | MEDIUM | R-45, C-21.4, T-53 | The inline-formula "vector" clause excuses itself and is not tested |
+| F-162 | MEDIUM | T-53, C-17 | T-53's scripted oracles need data `--print-pdf` does not produce |
+| F-163 | MEDIUM | §9.6, §9.7 | The v0.14 visual surfaces have no observed test and no reference image |
+| F-164 | LOW | R-35, T-36, C-06.5 | mermaid.js console output in WebKit's processes is outside R-35 and T-36 |
+| F-165 | LOW | C-13, §10, D-45 | No licence obligation stated for the bundled mermaid.js |
+| F-166 | LOW | C-20.1, C-02 rule 9 | BOM before the fence is undefined; the old-bookmark compatibility claim is overstated |
+| F-167 | LOW | C-09, C-09.1 | C-09.1 cites theme fields C-09 does not declare |
+| F-168 | LOW | T-42, C-04, C-17 | T-42's key list and C-17's `expect` enum were not extended |
+| F-169 | LOW | §12 D-46, D-50 | Two *Affects* cells omit ids their decisions constrain |
+| F-170 | LOW | C-21.1, R-45 | The measure rationale mixes a padded frame with a content width; "empty" is ambiguous |
+| F-171 | LOW | C-22.1, C-12 | `>` inside a quoted attribute ends the tag; `<img>` in a heading reaches the TOC raw |
+| F-172 | LOW | T-53, C-21.3 | "No window flashes" holds only when the PDF route succeeds |
 
 ## 4. Detailed Findings
 
-### F-126 — Two `MUST`s disagree on the back-snapshot of a same-document citation
+### F-149 — No rule for the state with zero document windows
 
-**Severity: CRITICAL**
+**Severity:** HIGH
 
-**Location:** §2.3 R-18 (line 69) vs §2.3 R-19 (line 70) and §5.5 C-19.4 (line 538).
+**Location:** R-01 (line 42), R-47 (line 48), §3.1 `CLOSED`, E-30 (line 790)
 
 **Observation**
 
-R-18 states, without qualification:
+R-47 adds File · *Close Window* (⇧⌘W) and says "the application keeps running". The window's close button already allowed the same state. R-01's new target rule is "the key window when it is a document window, else the frontmost visible document window …, else any document window". It has no case for **no document window at all**. So in that state the spec does not say what happens on any of these:
 
-> A same-document jump from a `#fragment` link (R-19) or TOC row (R-21) MUST push a snapshot and clear the forward stack.
+- a Finder double-click or `bin/mdv6 FILE` (a LaunchServices open event);
+- ⌘O, ⌘⇧O, ⌘P, ⌘0, ⌘1…⌘5 or ⌘?;
+- a click on the Dock icon.
 
-R-19, as amended in v0.12, states:
-
-> […] a same-document line fragment MUST NOT push a snapshot or select a TOC row […]
->
-> a same-document line fragment MUST NOT push a snapshot on a same-document jump
-
-(repeated in C-19.4: "MUST NOT push a back snapshot on a same-document jump").
-
-A line citation *is* a `#fragment` link handled by R-19 — that is precisely how R-19 now routes it. R-18 has not been amended, and no precedence rule exists between the two rows.
+§3.1 makes `CLOSED` terminal for the window, and E-30 covers only launch.
 
 **Why it matters**
 
-The two rows cannot both be satisfied for the same event. An implementer must guess which row wins, and the guess is observable: it decides whether ⌘← returns to the pre-click position after a citation jump.
+This path is common: the reader closes the window, then double-clicks a `.md` file in Finder. One conforming build creates a window and loads the file. Another drops the event, because R-01 names no target. The original (a SwiftUI `WindowGroup`) creates a window on a Dock click, but its unaddressed notifications for ⌘O etc. reach no view.
 
 **Potential consequence**
 
-Two conforming builds behave differently on every same-document citation click. T-49 asserts the R-19 behaviour ("**without** pushing a back snapshot"), so the T-49 run distinguishes them — but the specification, not the test, must settle it.
+A Finder double-click silently does nothing, and T-03/T-61 pass or fail depending on whether a window happened to be open.
 
 **Recommended resolution**
 
-Amend R-18's clause to name the kind it means, e.g.:
+Add a clause to R-01, with E-38 and a T-61 case: when no document window exists, an open event, ⌘O, ⌘0, a bookmark slot and ⌘? MUST first create one window (as launch does, E-30), which then becomes the target. ⌘P, ⌘W and Next/Previous File are disabled. A Dock click with no window creates one that follows R-40.
 
-> A same-document jump from a **slug** `#fragment` link (R-19 (2)), a **line-citation** `#fragment` link (R-19 (1)) or a TOC row (R-21) MUST push a snapshot […], **except** that a line-citation jump — a position move, not a choice (C-19.4) — MUST NOT.
+### F-151 — The web view's context menu, scroll, focus and selection are unspecified
 
-This is a one-clause edit and removes the contradiction in favour of the behaviour C-19 already specifies.
+**Severity:** HIGH
 
----
-
-### F-127 — "Fragment" now denotes two kinds with different effects, and four existing rows still assume one
-
-**Severity: HIGH**
-
-**Location:** C-19.1/C-19.4 (lines 520, 538) vs E-22 (line 626), E-29 (line 633), C-18.8 (line 509), R-18 (line 69).
+**Location:** R-09 (line 56), R-46 (line 66), R-49 (line 81), C-06.5 (line 362)
 
 **Observation**
 
-C-19.1 defines a **line fragment** (`^L…$`) as a second kind of fragment, dispatched before slug comparison (R-19). Four existing normative rows speak of "a `#fragment`" as a single kind:
+R-09 says a web-path diagram's "hover toolbar and context menu" offer *Show Mermaid source* and copy. A `WKWebView` does four things by default that the spec never addresses:
 
-- **E-22**: "`#fragment` whose target is an h4–h6 heading […] Fragment: no-op — only `#`–`###` single-line ATX headings are targets." If `#L10` is aimed at a document whose line 10 is an h4 heading, is the click a no-op (E-22) or does it scroll and flash (C-19.3)?
-- **E-29**: "a cross-file `#fragment` (R-19) that lands on a TOC heading selects that row." If a line citation lands on a TOC heading block, does the row select? C-19.4 says a line citation MUST NOT select a TOC row; E-29's "`#fragment`" is unqualified.
-- **C-18.8** says the selected row is the one "chosen […] by a same-document fragment link […] that lands on a TOC heading", with the same ambiguity.
-
-C-19.4's negative clauses ("MUST NOT select a TOC row", "MUST NOT push a snapshot") are stated as absolutes but collide with rows that grant exactly those effects to "a fragment".
+1. It shows **WebKit's own** context menu (Reload and similar; *Inspect Element* when inspectable) on a right-click inside the web view, so the block menu R-09 describes never appears there.
+2. It takes scroll-wheel events and rubber-bands, so the article stops scrolling while the pointer is over a diagram.
+3. It becomes first responder when clicked. R-49 then hands every scroll key to the web view, because its first responder is neither nothing nor a read-only `NSText`.
+4. It lets the reader select the SVG's text.
 
 **Why it matters**
 
-Each collision resolves in a different direction depending on which row an implementer reads first. The behaviours diverge visibly: whether the TOC highlights, and whether ⌘← is armed.
+Each of these is visible to the reader, and two competent builds will differ. One suppresses WebKit's menu and forwards wheel events to the enclosing scroll view. The other leaves the defaults, and so fails R-09's menu requirement and makes the document un-scrollable under a gantt chart.
 
 **Potential consequence**
 
-A citation that lands on a `##` heading selects or does not select that TOC row depending on the build; the same citation into an h4 heading does nothing in one build and flashes in another.
+T-21 and T-54 pass on one build and fail on another. After the reader clicks a diagram, keyboard scrolling (R-49) silently stops.
 
 **Recommended resolution**
 
-Introduce one disambiguating term and use it in every affected row — e.g. **slug fragment** for the C-11 form and **line citation** for the C-19 form — and state the precedence once, in R-19 (already: line form wins when it parses). Then amend E-22, E-29, R-21 and C-18.8 to say "slug fragment", and let C-19.4 own the line-citation behaviour outright.
+Add to C-06.5:
 
----
+- the web view MUST NOT show WebKit's context menu; a right-click shows the R-09 block menu;
+- scroll-wheel events MUST pass to the article's scroll view;
+- the web view MUST NOT become first responder, so R-49 is unaffected;
+- say whether text inside the diagram is selectable (recommended: not selectable, as with native diagrams).
 
-### F-128 — The C-19.1 grammar accepts `#L0` while the same row's prose rejects it
+Add T-54 clauses for each.
 
-**Severity: HIGH**
+### F-150 — The YAML guard accepts an ATX heading as a comment and swallows a title
 
-**Location:** C-19.1 (line 526) vs E-06 (line 610), E-31 (line 635).
+**Severity:** MEDIUM
+
+**Location:** C-20.1 (line 538), E-32 (line 792), D-48
 
 **Observation**
 
-C-19.1 gives the grammar
-
-```
-^L([0-9]+)(?:-(?:L)?([0-9]+))?$        case-insensitive, anchored
-```
-
-`[0-9]+` matches `0`, so `#L0` **matches the grammar**. The same paragraph then says:
-
-> A fragment that does not match this pattern in full (including `#L`, `#L0`, …) is **not** a line fragment […]
->
-> `#L0` is not a citation: line numbers start at 1.
-
-E-31 repeats that `#L0` "is not a citation (C-19.1) and falls through to E-06", and E-06 says "A fragment that matches C-19.1's grammar is a line citation and never reaches this row (E-31)". So E-06 and E-31 also contradict each other on this input, under the grammar as written.
+C-20.1 lets a YAML candidate line pass the guard when it "starts with `#` (a comment)". An ATX heading `# Title` starts with `#`. Take a document whose lines are `---`, blank, `# Title`, blank, `---`, then prose — a horizontal rule, a title, a rule. It passes the guard: the blank lines pass, `# Title` passes as a comment, and the second `---` closes the header. Everything down to the second rule becomes a header with **zero rows** (C-20.2 skips `#` lines), which C-20.3 draws as nothing. The title disappears from the page and from the TOC (C-02 rule 7 sees the header's first line, `---`). E-32 promises the opposite for documents that open with `---` and are not frontmatter.
 
 **Why it matters**
 
-The two readings produce opposite, user-visible outcomes, and this is the one input where the resolution rule is destructive:
-
-- *Reading A (regex is authoritative):* `#L0` parses with $a = 0$; no block has $\text{lowerBound} \le 0$; the implementer applies C-02 rule 8's "resolve to the last block" clamp → scroll to the **end** of the document and flash the last block.
-- *Reading B (prose is authoritative):* `#L0` is not a citation → slug match → unmatched → E-06 no-op.
+The behaviour is deterministic, so two implementers agree. But it contradicts the stated intent ("false negatives are cheap and false positives are not") and E-32's claim, and a reader loses content without any signal.
 
 **Potential consequence**
 
-A malformed citation navigates to the wrong end of the document, or silently does nothing, depending on which sentence the implementer implemented.
+A document styled with rules around its title renders without its title.
 
 **Recommended resolution**
 
-Make the grammar state what the prose means, and delete the ambiguity at its source:
+Choose one and record it in D-48:
 
-```
-^L([1-9][0-9]*)(?:-(?:L)?([1-9][0-9]*))?$      case-insensitive, anchored
-```
+- **(a)** YAML comments must be `#` followed by a space **and** the header must contain at least one mapping or sequence line; or
+- **(b)** a candidate that yields zero rows is not a header.
 
-Then E-06's "matches C-19.1's grammar" clause, E-31's first sentence, and C-02 rule 8's "not covered" clause all agree without further edits. (Alternatively keep `[0-9]+` and add a mandatory post-parse guard $a \ge 1$; the regex form is preferable because it is the one an implementer transcribes.)
+(b) is the smallest change and also covers `---`/`---` at the top of a file. Add the case to E-32 and T-52.
 
----
+### F-152 — A multi-line `%%{…}%%` directive dispatches native and then fails
 
-### F-129 — T-49 asserts a state its own fixture does not produce
+**Severity:** MEDIUM
 
-**Severity: HIGH**
-
-**Location:** §9.4 T-49 (line 722) vs `test-docs/links-sibling.md` (11 lines).
+**Location:** C-06.4 (line 360), C-06.1, E-02, T-54
 
 **Observation**
 
-T-49 requires:
-
-> `[cite](links-sibling.md#L10-L12)` loads the sibling, scrolls **the paragraph containing line 10** to the top of the viewport, and flashes that one block […]
->
-> A citation past the sibling's `lineCount` **and one naming a line inside the removed blank-line gap** both scroll to and flash the **last** block (E-31) […]
-
-The fixture is:
-
-```
-1  # Sibling
-2  (blank)
-3  Paragraph one of the sibling, linked from [links.md](links.md).
-4  (blank)
-5  ## Second heading
-6  (blank)
-7  Paragraph under the second heading.
-8  (blank)
-9  ## Third heading
-10 (blank)
-11 Paragraph under the third heading.
-```
-
-Line 10 is **blank** — it is precisely an instance of "a line inside the removed blank-line gap". By C-02 rule 8 / C-19.3, line 10 resolves to the last block whose $\text{lowerBound} \le 10$: the `## Third heading` block (line 9). That is neither "the paragraph containing line 10" nor "the last block" (`Paragraph under the third heading.`, line 11). The two clauses of T-49 are therefore both false for this fixture, and mutually inconsistent besides. A second problem in the same sentence: the fixture has 11 lines, so the `-L12` end of the citation is past `lineCount` — harmless under C-19.2 (the end is informational), but it means the "past `lineCount`" assertion cannot use this citation.
+C-06.4 skips a `%%{ … }%%` directive over several lines when choosing the path, so `%%{\n init: {…}\n}%%\nflowchart LR` dispatches **native**. On the native path, no C-06.1 rule removes directives. The library drops only lines that start with `%%` (`Parser.swift:14`), so the directive's middle and closing lines reach the parser, and a parse error follows. E-02 then forbids a retry on the web path. T-54 tests only the single-line form, which happens to work.
 
 **Why it matters**
 
-T-49 is the acceptance criterion for the entire v0.12 feature. As written it fails against a correct implementation, and its failure would be misread as an implementation defect.
+A dispatch rule that knows about a construct should not hand it to a parser that does not. Otherwise the rule's own test (T-54) covers only the forms that work.
 
 **Potential consequence**
 
-A build that implements C-19 exactly correctly is marked non-conforming; or, worse, the implementer "fixes" the resolution rule to match the test and breaks the gap-clamp rule.
+Diagrams that use multi-line `init` blocks, a common pattern in the wild, show the fallback even though both renderers could draw them.
 
 **Recommended resolution**
 
-Either (a) change the fixture — insert a blank line after line 3 so that line 10 falls inside `Paragraph under the second heading.` — and re-derive every cited number from `nl -ba`, or (b) change the citation to `#L11` and state that line 10 is the gap case ("scrolls to and flashes `## Third heading`, the block preceding the gap"). Whichever is chosen, cite the fixture's line numbering explicitly in T-49 so the next editor can re-verify it.
+Add a C-06.1 rule 0 that removes leading front-matter and `%%{…}%%` directive lines with exactly C-06.4's extent. Alternatively, dispatch any source whose preamble holds a directive to the web path, since only mermaid.js honours `init`. Add the multi-line case to T-54.
 
----
+### F-153 — R-08 requires a `diff` fence to be plain; R-50 requires it tinted
 
-### F-130 — Resolution is undefined for a line that precedes the first block
+**Severity:** MEDIUM
 
-**Severity: MEDIUM**
-
-**Location:** C-02 rule 8 (line 216), C-19.3 (line 536), E-31 (line 635).
+**Location:** R-08 (line 55), R-50 (line 67), C-05
 
 **Observation**
 
-C-02 rule 8 resolves an uncovered line to "the **last** block whose range starts at or before it". C-19.3 restates this and adds:
-
-> A resolution that finds no block (**an empty document**) scrolls to the top and flashes nothing.
-
-E-31 covers "a line citation into a document with no blocks". Neither addresses a non-empty document whose first source line is not in any block — a document beginning with blank lines, e.g.:
-
-```
-1 (blank)
-2 (blank)
-3 # Title
-```
-
-A citation to `#L1` has no block with $\text{lowerBound} \le 1$. Rule 8's clause is unsatisfiable; C-19.3's parenthetical attributes the no-block case only to empty documents; E-31's list ("past `lineCount`, inside a gap, `#L0`") does not include it.
+R-08 says fenced code "MUST render as plain monospaced text — never an error — for any other or missing language hint". `diff` and `patch` are not K-05 languages, so R-08 requires them to be plain. R-50 requires line tinting. C-05's new bullet says `diff` bypasses tree-sitter, but R-08 was not amended.
 
 **Why it matters**
 
-The input is ordinary (leading blank lines are common in files that begin with a comment or front matter), and the rule that was written to make every line resolvable does not cover it.
+Two `MUST`s at the same level conflict. A checker that walks R-08's test (T-06, "an unknown fence is plain") could flag R-50's behaviour.
 
 **Potential consequence**
 
-Implementers diverge between "scroll to the first block and flash it" and "scroll to the top and flash nothing".
+Conformance arguments over which row wins. No behavioural divergence is likely, but the spec is inconsistent.
 
 **Recommended resolution**
 
-Add the case to E-31 and make rule 8 total: "when no block starts at or before the line — a line before the first block — the target is the **first** block; only a document with no blocks at all scrolls to the top and flashes nothing." Alternatively, treat "no block satisfies the predicate" uniformly as the empty-document behaviour and say so in rule 8.
+Amend R-08 to "… for any other or missing language hint, **except the `diff`/`patch` fence words of R-50**".
 
----
+### F-154 — R-06 persists a position on every file switch; R-47 forbids it on close
 
-### F-131 — `blockLines`' boundary convention is stated three incompatible ways
+**Severity:** MEDIUM
 
-**Severity: MEDIUM**
-
-**Location:** §4 C-02 `ParsedDocument` (line 200), rule 8 (line 216), C-19.3 (line 536).
+**Location:** R-06 (line 47), R-47, §3.1 `LOADING` row
 
 **Observation**
 
-Three statements describe the same type:
-
-1. The field comment: `blockLines: [Range<Int>] // 1-based, inclusive-exclusive source lines per block`.
-2. Rule 8: "`blockLines[i]` is the range of **1-based** source line numbers that block `i` **occupies**" and "`blocks[i]` is exactly `raw`'s lines `blockLines[i]`, with rule 5's trimming applied only inside the block text".
-3. C-19.3: the target is the last $i$ with $\text{blockLines}[i].\text{lowerBound} \le a'$.
-
-Statement 1 says the upper bound is exclusive; statement 2's "exactly … with trimming applied" is self-contradictory (if trimming is applied, the block is not exactly those lines) and does not settle whether the upper bound is the last occupied line or one past it. A block occupying source lines 5–7 is legitimately storable as `5..<8` or as `5..<7`; the two differ by one in every containment test and in the gap logic of rule 8.
+R-06 says the application "MUST persist the current position … before loading a different file into the window". R-47 says the closed file's position "MUST NOT be written back after its row is gone", and §3.1's `VIEWING` row was amended to match. However, R-06 and the `LOADING` row ("Outgoing document's scroll position persisted when one exists (R-06)") were not. The same gap already existed for swipe-delete of the displayed row, which v0.14 now shares.
 
 **Why it matters**
 
-Off-by-one in the map is the classic defect for this feature, and one plausible reading silently mis-resolves every citation whose line is a block's last line.
+An implementer who follows R-06 writes an orphan `scroll_positions` row for a file R-26 just removed. R-26's "the search population is exactly the current history" then silently has a scroll-table counterpart that is not exact.
 
 **Potential consequence**
 
-`#L7` resolves to the following block (or to the same block) depending on the convention chosen.
+Re-opening a closed file restores a stale position, while T-25 expects "starts at the top".
 
 **Recommended resolution**
 
-State the convention once, explicitly, in rule 8, and make rule 8 the single owner of the definition: "`blockLines[i]` is half-open: $\text{lowerBound}$ is the block's first source line (1-based) and $\text{upperBound}$ is one past its last. `blocks[i]` equals `raw`'s lines `blockLines[i]` after rule 5's trimming." Drop the field's duplicate comment or make it point at rule 8.
+Add to R-06: "…except when the outgoing file's history row is being removed (swipe-delete, ⌘W, *Close All*, cap eviction), which persists nothing." Mirror the exception in the `LOADING` row.
 
----
+### F-155 — E-26 says only the key window acts; *Close All* acts in every window
 
-### F-132 — The three new ids are unrealised but carry no status marker
+**Severity:** MEDIUM
 
-**Severity: MEDIUM**
-
-**Location:** §11 note (line 756), rows C-19 (820), E-31 (881), T-49 (211).
+**Location:** E-26 (line 786), R-47, E-36
 
 **Observation**
 
-The front matter and §11 define a status discipline:
-
-> *not yet realised* marks specified work with no implementation
-
-§11 then states:
-
-> **At v0.11 every row is plain:** the v0.8 *not yet realised* and **open defect** rows were built and fixed […]
-
-At v0.12, `C-19`, `E-31` and `T-49` are specified with no implementation and no verifying test — independently confirmed by the tool walk, which reports them `UNCITED` (`3 uncited; 0 dangling, 0 stale`). They are `PASSING`-shaped plain rows, and the blanket "every row is plain" sentence actively asserts the opposite of their state.
+E-26: "a menu command … arrives. Only the key window acts". R-47 and E-36 make *Close All* put **every** window into `EMPTY`. E-26 has no exception. E-36 also does not say what happens to a window that is `LOADING` or `RELOADING` when *Close All* is confirmed. A load that completes afterwards would re-add its row through an adding route, so history would no longer be empty.
 
 **Why it matters**
 
-A reader (or an agent) using §11 to decide what is built will conclude that line citations exist. The discipline exists precisely to prevent that, and v0.12's own revision entry (which describes C-19 as "specified") is not where a reader looks per-id.
+The exception is intended (D-50) but stated in only one of the two rows. The in-flight case is a real race with two plausible outcomes.
 
 **Potential consequence**
 
-A conformance claim that the citation feature works, with no code behind it.
+One build cancels the in-flight load; another lets it finish and re-populate history.
 
 **Recommended resolution**
 
-Mark the three rows *not yet realised* and replace the blanket sentence with the current state, e.g.: "Every row is plain except C-19, E-31 and T-49 (*not yet realised*, added in v0.12)." Update it when the build lands.
+Add "except *Close All* (R-47, E-36)" to E-26. In E-36, require an in-flight load in any window to be cancelled (as E-25 cancels renders) before history is cleared.
 
----
+### F-156 — The raster-width and zoom rules say "a diagram" without excluding the web path
 
-### F-133 — C-19 does not state that non-Markdown targets are out of its scope
+**Severity:** MEDIUM
 
-**Severity: MEDIUM**
-
-**Location:** C-19 (lines 518–538) vs R-19 classification (line 70), E-05 (line 609).
+**Location:** R-11 (line 58), K-07 (line 723), I-005 (line 698), R-46, C-06.5
 
 **Observation**
 
-R-19's classification sends every destination whose extension is not `md`/`markdown`/`mdown` to the system opener. The canonical GitHub citation is `[Foo.swift L412–418](Foo.swift#L412-L418)` — a **code** file. Such a link never reaches `handleLink`'s in-app branch, so C-19 never runs; the click is handed to the opener, which may do nothing or open an editor. C-19 does not say this, and neither the status line nor D-44's *Alternatives* column records it as a deliberate boundary of the feature.
+R-11: "A diagram MUST be rasterised at the exact width from the §7.2 formula … MUST NOT be drawn wider than its natural width". K-07 caps the zoomed container at 540 pt. A web-path diagram is not rasterised. It is laid out by `max-width: 100%` inside 18 px padding, has no pinch zoom, and has no "natural width" the spec defines. Only R-09 says pinch zoom is native-only. R-11 and K-07 are unqualified, and I-005 speaks of "every mermaid raster" (which is at least literally true).
 
 **Why it matters**
 
-The feature's motivating use case is citation into source files. An implementer reading C-19 alone would reasonably build line resolution that is unreachable for exactly those links, and a reader would reasonably expect `Foo.swift#L412` to work.
+A verifier running T-18 across `mermaid-web-fallback.md` cannot tell whether a gantt chart drawn wider than its intrinsic SVG width is a violation.
 
 **Potential consequence**
 
-The feature ships and appears not to work for the links the reader cares about most, with no row explaining why.
+T-18 fails or passes arbitrarily on web diagrams.
 
 **Recommended resolution**
 
-Add one sentence to C-19 (or D-44) pinning the boundary: line citations apply only to in-app destinations, i.e. the R-19 Markdown extensions; a citation whose target extension is anything else follows R-19's system-opener classification (E-05) and C-19 does not apply. If citations into code files are wanted, that is a separate scope decision (a read-only source view), not an omission to be papered over.
+Scope R-11 and K-07 to "a natively dispatched diagram". In C-06.5, state the web width rule: the SVG fills the column minus 36 px and scales down, never up, as `max-width: 100%` implies.
 
----
+### F-157 — The inline blocked-remote `<img>` placeholder is required and ruled out in the same row
 
-### F-134 — T-49's scripted content sits in a manual group and its visual assertion is outside the observed set
+**Severity:** MEDIUM
 
-**Severity: MEDIUM**
-
-**Location:** §9.5 (T-49 sat at the end of the "Robustness and resources (scripted)" table), T-49 (line 722), §9.6 (line 726), §9.0 group table (line 650).
+**Location:** R-16 (line 62), C-22.2 (line 581)
 
 **Observation**
 
-T-49 asserts two quite different things: a rendered, timed visual effect (scroll position, a 0.6 s flash) and purely internal map values ("The separated `blockLines`/`lineCount` maps are asserted directly for a document whose blocks are …"). It sits at the end of §9.5, a section labelled *scripted*, while §9.0 routes T-49 to the **UI / manual** group — so the deterministic half is filed under a section that is supposed to run in `swift test` and cannot run it, and the visual half is filed as manual without being owned by §9.6. The map assertions are deterministic and belong to the scripted suites (`Tests/mdv6Tests`), in the spirit of the §9.0 grouping that puts pure contracts there. Separately, §9.6 enumerates the tests whose outcome a conformance report MUST include as observed (T-44, T-47, T-48) because they are visual; T-49's flash is equally visual, and the flash is the only part of the feature a scripted test cannot check.
+C-22.2 says remote `src` shows "the blocked placeholder when *Load Remote Images* is off, on the inline path as on the block path". Two sentences later it says "on the inline path it is left out of the line (the renderer draws no inline placeholder)". R-16's placeholder is also **clickable** (it opens the View menu), and an image inside a `Text` line cannot carry its own click action. The same question applies to the amended R-16 for plain Markdown inline remote images.
 
 **Why it matters**
 
-The spec's own §9.0 table exists to route each criterion to a runnable mechanism. Misrouting the scripted half makes it look unverifiable in CI; omitting the flash from §9.6 lets a report claim "verification pending"-free conformance without anyone having seen the highlight — the exact failure D-40 was written to prevent.
+The row contradicts itself, and the part that contradicts is not implementable as stated.
 
 **Potential consequence**
 
-The deterministic half is not run automatically, and the visual half is never observed.
+Implementers pick either a silent omission or a non-clickable inline glyph.
 
 **Recommended resolution**
 
-Split T-49: keep the click/scroll/flash assertions in §9.4 (manual) and move the `blockLines`/`lineCount` assertions into a scripted test under §9.0's "Pure/Fixture" group; add T-49's flash to §9.6's observed set.
+State what an inline blocked remote image draws. The recommendation is an inline, non-clickable image of the text *Remote image blocked*, sized to the line height, with the View-menu reveal available only on the block path. Apply the same rule in R-16.
 
----
+### F-158 — Block 0 as a header: anchoring, title, flash, stripe, selection and spacing are unstated
 
-### F-135 — The 0.6 s constant is labelled for one of its two uses
+**Severity:** MEDIUM
 
-**Severity: LOW**
-
-**Location:** K-06 (line 574).
+**Location:** R-44, R-27, R-28, C-18.7 (line 682), C-19.3, I-014/K-16, C-02 rule 9 (line 243)
 
 **Observation**
 
-K-06 reads "Heading-copy flash: 0.6 s". C-19.3 introduces a second consumer of the same duration ("**flash** that single block … for the R-22 duration ($0.6\,\mathrm{s}$)") and R-22 owns the original. The constant's label now names a use rather than the quantity.
+Rule 9 makes the header an ordinary block for anchoring, and I-018 says hiding it is view-only. With *Show Frontmatter* **off**, block 0 has zero height at the top of the article. The spec does not say:
+
+1. whether ⌘D's "topmost block whose frame intersects the viewport" (R-27) can pick it;
+2. what R-27 titles it — its stripped first line is `---`, which C-12 does not strip;
+3. what a C-19 citation of `#L2` flashes (nothing visible);
+4. whether it keeps the 6 pt block padding and the 8 pt stack spacing, which leave an empty band above the first heading.
+
+With the table **shown**, the spec does not say:
+
+5. whether the table carries the C-18.7 hover stripe;
+6. whether its text is selectable (R-22 speaks of "prose blocks");
+7. what gap separates it from the next block — I-014/K-16's rhythm band covers heading and paragraph pairs only.
 
 **Why it matters**
 
-Trivial, but the constants table is the place an implementer looks to confirm the value; a label that names only one use invites a second constant being introduced for the citation flash.
+Each item is observable, and the reference images show no header. The skill's §3.5 visibility test applies: a feature the reader can toggle must say how it looks in both states.
 
-**Potential resolution**
+**Potential consequence**
 
-Relabel to "Block flash (heading copy R-22, line citation C-19.3): 0.6 s".
+Bookmarks titled `---`; a blank strip above the title when the header is hidden; inconsistent spacing across builds.
 
----
+**Recommended resolution**
 
-### F-136 — C-19 is placed inside the "Window chrome" section
+In R-44:
 
-**Severity: LOW**
+- a hidden header occupies no height and no stack spacing;
+- it is never the ⌘D/⌘⇧0 anchor; the next block is;
+- a bookmark or placeholder whose anchor is block 0 is titled `Frontmatter`;
+- a citation into a hidden header flashes nothing and scrolls to the top.
 
-**Location:** §5.5 (line 486 heading), C-19 (line 518).
+For the shown table, state the stripe (yes), selection (values selectable, as prose), and the table-to-next-block gap (`paragraphBottomSpacing`, like a GFM table). Add a T-52 clause.
+
+### F-159 — Find on a header can take the whole-block tint, which draws nothing when hidden
+
+**Severity:** MEDIUM
+
+**Location:** R-24 (line 87), R-44
 
 **Observation**
 
-`§5.5`'s heading is `### C-18 Window chrome (§5.5, normative structure)`. C-19 follows `C-18.10` under that same heading, so a contract about link-fragment semantics is nested in the window-chrome section. C-19 is a navigation/behaviour contract of the same family as C-11 or C-12.
+R-24 now promises that a match inside a hidden header "shows the header's source with the match marked". But R-24's classifier sends a block to the **whole-block tint**, not to the inline path, when it contains `![` anywhere, or when its first line contains `|` and its second line is a table rule. A header can do either (`image: ![x](y)`, or a TOML value holding `|`). A tinted hidden header draws nothing, which breaks the promise. The inline path also "interprets inline Markdown", which contradicts R-44's "values are plain text" while find is open.
 
 **Why it matters**
 
-Organization only; nothing normative depends on it. It does affect how a reader or a checker attributes §5.5's scope, and §5.5 is explicitly described as the chrome section in the front matter's scope paragraph.
+The one guarantee the new clause makes can be defeated by header content, and there is no test for it.
 
-**Potential resolution**
+**Potential consequence**
 
-Give C-19 its own heading at the §4 level (beside C-11/C-12, which own fragments and text), or promote it to a §5.6 heading. Either keeps the id and content unchanged.
+A match counted in $m$ that is invisible on screen: ⌘G scrolls to an empty strip.
 
----
+**Recommended resolution**
 
-### F-137 — C-19.3's analogy and D-44's dependency list are imprecise
+Say that a header block with a match always takes the inline path, rendered **verbatim** (no inline-Markdown interpretation), whatever R-24's tint tests would say. Add the `![` case to T-52.
 
-**Severity: LOW**
+### F-160 — Print does not say whether block-boundary rhythm is re-applied
 
-**Location:** C-19.3 (line 536), D-44 (line 931).
+**Severity:** MEDIUM
+
+**Location:** C-21.2 (line 561), I-014, C-18.10, K-17
 
 **Observation**
 
-Two small imprecisions:
-
-1. C-19.3 says the citation scrolls "exactly as a TOC row does (R-21)". A TOC row does three things — push a snapshot, select the row, scroll — and C-19.4 removes two of them. "Exactly as" is the opposite of what is meant; "the same scroll as a TOC row, without the snapshot or the selection (C-19.4)" is the accurate comparison.
-2. D-44's *Affects* column lists `R-19, C-02 rule 8, C-19, E-06, E-31, T-22, T-49` but omits R-18 and E-29/C-18.8 — the rows F-126 and F-127 show must change.
+Print renders "each C-02 block on its own", from a tree that "mirrors the screen's block view", with $12\,s_p$ pt between blocks. C-18.10 and I-014 require a per-block renderer to **re-apply** the theme's heading top and bottom spacing at block boundaries, because MarkdownUI's margins act only between siblings. C-21 does not say whether print does the same, and I-014 is stated for the screen. The original prints without re-applying them, as its screen did before v0.9.
 
 **Why it matters**
 
-Both are reading aids; the second one matters because the *Affects* column is how a future editor finds the rows a decision touches.
+The same flush-heading failure D-40 recorded for the screen can recur on paper, and the spec neither requires nor excludes it.
 
-**Potential resolution**
+**Potential consequence**
 
-Reword C-19.3's clause; extend D-44's *Affects* column once F-126/F-127 are applied.
+Two conforming builds print headings with visibly different spacing. One matches the screen; one reproduces `RECREATION-MDV7`'s defect.
 
----
+**Recommended resolution**
 
-### F-138 — T-49 does not name the fixture for its empty-document assertion
+State in C-21.2 that the C-18.10 boundary margins, multiplied by $s_p$, are applied between printed blocks **in place of** the flat $12\,s_p$ gap where they are larger (or in addition to it, whichever is intended). Extend T-53 with a K-16-style gap check on the printed rhythm document.
 
-**Severity: LOW**
+### F-161 — The inline-formula "vector" clause excuses itself and is not tested
 
-**Location:** T-49 (line 722).
+**Severity:** MEDIUM
+
+**Location:** R-45 (line 122), C-21.4 (line 565), T-53
 
 **Observation**
 
-> A citation into a document with no blocks scrolls to the top and flashes nothing.
-
-No fixture is named. §9.4's sibling tests name their files; the zero-byte `.md` used by T-39 exists but is not referenced here.
+R-45: "an inline formula as vector glyphs where C-21.4's overlay succeeds". C-21.4 then prescribes the mechanism in detail: invisible placeholders with a $1 \times (k+1)$ pixel signature, read back from the content stream. Because failure is permitted without limit, a build whose overlay **never** succeeds conforms. No test in T-53 checks inline formulas at all. The mechanism is also normative, although only the outcome is observable.
 
 **Why it matters**
 
-The assertion is not reproducible as written.
+The requirement cannot fail, so it proves nothing. Meanwhile the prescribed mechanism rules out simpler designs, such as drawing formulas at positions reported by a layout callback, that meet the same outcome.
 
-**Potential resolution**
+**Potential consequence**
 
-Name the fixture (e.g. the zero-byte `.md` of T-39) or state that the test creates an empty document.
+A regression to all-bitmap inline math passes review.
 
----
+**Recommended resolution**
+
+State the observable outcome — e.g. "in `test-docs/math.md` every inline formula is drawn as vector glyphs (the block's page holds no image object inside that formula's rectangle)" — and keep the placeholder method as an informative *as built* note. Add the assertion to T-53. If the fallback must remain, make it an E-33 case with a count ceiling.
+
+### F-162 — T-53's scripted oracles need data `--print-pdf` does not produce
+
+**Severity:** MEDIUM
+
+**Location:** T-53 (§9.7), C-17 (line 473)
+
+**Observation**
+
+T-53's scripted half has four problems:
+
+1. It asserts "no image object for a standalone `$$…$$` block". `--print-pdf` reports block rectangles but not which image objects fall in them, and `math.md` legitimately contains baked bitmaps elsewhere (F-161). The checker must attribute images to blocks by geometry, and the spec does not say how.
+2. "PDFKit extracts the document's words" does not say how the words are obtained. Smart typography changes quotes and dashes, math is not text, and `<img>` alt text is not printed.
+3. It runs `--print-pdf` over "`test-docs/mermaid/` fixtures", but those are `.mmd` files and C-17's `--print-pdf` takes an `.md`.
+4. "Byte-identical page content streams" at two zooms and themes is a strong claim. It depends on `ImageRenderer` emitting deterministic resource names, which is not established.
+
+**Why it matters**
+
+The skill's oracle test applies: the expected result must be computable from the spec. Here two testers would write different checkers.
+
+**Potential consequence**
+
+T-53 is flaky or vacuous.
+
+**Recommended resolution**
+
+- Extend the `--print-pdf` JSON with, per block, the image objects drawn in its rectangle (count and pixel size).
+- Define the word oracle as the whitespace-split tokens of C-12-stripped prose blocks with smart typography off, excluding math and image blocks.
+- Allow `.mmd` input (wrapped as one fence), or name a `.md` fixture.
+- Weaken byte-identity to "identical extracted text and identical block rectangles within 0.5 pt".
+
+### F-163 — The v0.14 visual surfaces have no observed test and no reference image
+
+**Severity:** MEDIUM
+
+**Location:** §9.6 (line 890), §9.7, C-18.0
+
+**Observation**
+
+§9.6 requires a conformance report to carry observed outcomes for T-44, T-47, T-48 and T-49. Several v0.14 features are visual deliverables, but none of them is in that set: the properties table (T-52), the printed page (T-53, manual half), web diagrams (T-54), diff tinting (T-58), `<img>` sizing (T-59) and find typography (T-60). None has a reference image either. This is the D-40 lesson: behaviour rows were satisfied by builds that looked nothing like the product.
+
+**Why it matters**
+
+A build can report these features as conforming with nobody having looked at a printed page or a gantt chart.
+
+**Potential consequence**
+
+The table styling, the printed type size and a web diagram's background drift unnoticed.
+
+**Recommended resolution**
+
+- Add T-52, T-53 (panel half), T-54 and T-58 to §9.6's observed set.
+- Check in reference images from the original at `68aa008`: `frontmatter.md` rendered, one printed Letter page of `math.md` as PDF→PNG, `gantt.md` rendered, `diff.md` rendered.
+- Cite them from C-20.3, C-21, C-06.5 and C-05.1 as normative for structure (D-42's rule).
+
+### F-164 — mermaid.js console output in WebKit's processes is outside R-35 and T-36
+
+**Severity:** LOW
+
+**Location:** R-35 (line 109), T-36 (line 885), C-06.5
+
+**Observation**
+
+mermaid.js logs parse errors, including the offending source, to the JavaScript console. The console belongs to WebKit's web-content process. R-35 ("the application MUST NOT print document content … to any log") does not say whether that process counts. T-36 watches only `log stream --process mdv6`, so it would not see a leak there.
+
+**Recommended resolution**
+
+In C-06.5, set mermaid's `logLevel` to its quietest level (`'fatal'`) and keep the web view non-inspectable. Extend R-35/T-36 to cover WebKit's content process for the application's pages.
+
+### F-165 — No licence obligation stated for the bundled mermaid.js
+
+**Severity:** LOW
+
+**Location:** C-13, §10, D-45
+
+**Observation**
+
+D-45 rejected Metal grammars because they ship no licence file, which shows the spec treats licensing as a gate. mermaid.js is MIT and its minified build bundles third-party code (d3, DOMPurify, and others). The spec pins the file but says nothing about shipping its licence notices, and the file is excluded from the repository.
+
+**Recommended resolution**
+
+Require the bundle to carry mermaid's licence and its dependencies' notices (e.g. `Resources/mermaid.LICENSE.txt`), fetched and SHA-pinned like the script, and list it in C-01/C-13.
+
+### F-166 — BOM before the fence is undefined; the old-bookmark compatibility claim is overstated
+
+**Severity:** LOW
+
+**Location:** C-20.1, C-02 rule 9
+
+**Observation**
+
+1. C-20.1 requires line 1 to be exactly `---`. Whether a leading U+FEFF (a UTF-8 BOM) is removed by R-04's decode or by rule 6 is not stated, so a BOM-prefixed header is recognised by one build and not another.
+2. Rule 9 claims pre-v0.14 bookmarks "still resolve" when the header has no blank lines of its own. That holds only when a blank line also **follows** the closing fence. With `---` immediately followed by `# Title`, the old split had one block and the new split has two, so every later index shifts by one and C-08's clamped-index fallback lands one block off.
+
+**Recommended resolution**
+
+State that R-04 strips one leading U+FEFF before C-02 runs. Qualify rule 9's claim with the following-blank-line condition.
+
+### F-167 — C-09.1 cites theme fields C-09 does not declare
+
+**Severity:** LOW
+
+**Location:** C-09 (line 406), C-09.1 (line 424)
+
+**Observation**
+
+C-09.1 depends on `showH1Rule`, `showH2Rule`, `headingFontWeight`, `strongFontWeight` and `paragraphLineSpacingEm`. C-09's field list does not declare any of them. They exist in `TYPOGRAPHY.md` and in the code, and C-18.7 already cited `showH1Rule`. C-09 claims to list "the fields behaviour depends on".
+
+**Recommended resolution**
+
+Add the five fields to C-09's struct, with defaults from `TYPOGRAPHY.md`.
+
+### F-168 — T-42's key list and C-17's `expect` enum were not extended
+
+**Severity:** LOW
+
+**Location:** T-42 (line 871), C-04, C-17
+
+**Observation**
+
+T-42 enumerates the preferences it covers and omits the new `mdv6_show_frontmatter`, so R-32/C-04 conformance is untested for it. C-17's manifest shape documents `"expect": "render-or-fallback"`, but the `--scan` statuses now include `web`, and the manifest's `expect` values are not updated to match.
+
+**Recommended resolution**
+
+Add the key to T-42's list. Extend the manifest's `expect` enumeration to `render`, `fallback` and `web`.
+
+### F-169 — Two *Affects* cells omit ids their decisions constrain
+
+**Severity:** LOW
+
+**Location:** §12 D-50 (line 1146), D-46
+
+**Observation**
+
+D-50 decides that *Close All* acts in every window, which overrides E-26 and R-01's single-target rule. Its *Affects* cell lists R-47, §3.1, §5.1 and E-36, but neither E-26 nor R-01. D-46 does not list R-35 or T-36, which F-164 shows it touches. Change-impact tooling that reads the *Affects* cell will not see these edges.
+
+**Recommended resolution**
+
+Add E-26 and R-01 to D-50. After F-164 is resolved, add R-35 and T-36 to D-46.
+
+### F-170 — The measure rationale mixes a padded frame with a content width; "empty" is ambiguous
+
+**Severity:** LOW
+
+**Location:** C-21.1 (line 553), R-45
+
+**Observation**
+
+1. $s_p = w_c / W$ divides the paper's **content** width by `articleMaxWidth`, which K-13 defines as the cap on the **padded** frame. The screen's content column is $860 - 80 - 12 = 768$ pt, so "keeps roughly its characters per line" is about 11 % optimistic. The formula is deterministic; only the rationale is off.
+2. R-45 says ⌘P with "an empty" document beeps. R-04 defines an empty file as zero bytes **or** whitespace only; the original tests zero length.
+
+**Recommended resolution**
+
+Either keep the formula and correct the rationale, or use the content column ($W - 2p - 2b$) if matching the measure is the goal (record the choice in D-47). Say whether "empty" means zero blocks.
+
+### F-171 — `>` inside a quoted attribute ends the tag; `<img>` in a heading reaches the TOC raw
+
+**Severity:** LOW
+
+**Location:** C-22.1, C-12, C-02 rule 7
+
+**Observation**
+
+1. The candidate tag ends at "the first following `>`", even inside a quoted `alt="a > b"`. The attributes after that point are lost, and the rest of the tag prints as text.
+2. A heading such as `# Title <img src=logo.png width=20>` renders the image. But C-02 rule 7 takes TOC text from the raw heading, and C-12 does not strip HTML, so the TOC row and any ⌘D title show `<img src=logo.png width=20>`.
+
+**Recommended resolution**
+
+Skip quoted runs when looking for the closing `>`. Add "`<img …>` tags are removed" to C-12's order (as a new step before (2)).
+
+### F-172 — "No window flashes" holds only when the PDF route succeeds
+
+**Severity:** LOW
+
+**Location:** T-53, C-21.3
+
+**Observation**
+
+T-53 asserts that `gantt.md` "prints its chart with no window flashing on screen". C-21.3's fallback route orders a window front in order to snapshot it. The assertion is therefore conditional on the first route succeeding, which T-53 does not establish.
+
+**Recommended resolution**
+
+Word T-53 as "no window flashes when the PDF route succeeds (the harness or log reports which route ran)", or require the snapshot fallback to use a window positioned entirely off every screen.
 
 ## 5. Requirements Review
 
-Requirements are, with the v0.12 exception, observable obligations rather than aspirations: each names the trigger, the input, the result and the failure. R-01's split into adding/selecting routes, R-04's decode-before-add ordering, R-05's burst-coalescing bound ("at most two reloads") and R-19's resolve-then-classify structure are all testable as written. No requirement in §2 is a goal statement.
-
-The v0.12 material weakens this in one place: R-19's new clause and C-19.4 state effects negatively against rows (R-18, R-21/C-18.8, E-22, E-29) that grant those same effects to "a fragment", so the *combined* requirement set for a single click is contradictory rather than observable (F-126, F-127).
+The v0.14 requirements are observable and mostly precise. Each names its trigger, its effect, its disabled states and its source commits. The gaps are cross-rule contradictions, not vague rows: R-08/R-50 (F-153), R-06/R-47 (F-154), E-26/R-47 (F-155), and C-22.2 against itself (F-157). One requirement is unfalsifiable as written: R-45's inline-formula clause (F-161). The only requirement missing outright is the zero-window case (F-149).
 
 ## 6. Interface and Data-Contract Review
 
-**Visual surface (scorecard: complete).** §5.5/C-18 is the strongest part of the document. Every pane has region layout, an element inventory, per-element states (empty/hovered/selected/current/missing/collapsed), metrics in K-16, and reference images cited by C-18.0; the *visibility test* is answered for the two features most often left invisible elsewhere — R-28's placeholder is required to be the first bookmarks-pane row, and the hovered-block stripe is given its own row. §9.6 supplies the observed-test rule and the oracle is external (reference image/measurement/person). No finding.
+The new pure interfaces are implementation-grade:
 
-**Data contracts.** C-08's fingerprint and `resolve`, C-15's JSON, C-03's FTS schema and K-14's ceilings are precise, with degenerate cases stated. The v0.12 addition is the weak point: `blockLines` enters `ParsedDocument` with three inconsistent boundary statements (F-131) and a resolution rule that is not total (F-130).
+- C-05.1's classifier is stated as a state machine with counters.
+- C-06.4's dispatch names its keywords and its preamble grammar.
+- C-20.1/C-20.2 give recognition and reduction exhaustively.
+- C-22.1/C-22.2 give the URL encoding, attribute grammar and size function.
+- The per-theme diff colour table gives exact values.
 
-**Interfaces.** §5.1's menu table, §5.2's CLI table (including the "first missing argument" and bundle-not-found rows) and §5.3's release table are complete and state their error paths.
+C-04 gained its key, but T-42 did not (F-168). C-17's `web` status and `--print-pdf` are defined; the latter's JSON output is too thin for the test that uses it (F-162).
+
+**Visual surface.** C-18's structure-first discipline is not carried into the new surfaces. The properties table (C-20.3) has metrics but no reference image. The printed page, the web diagram and the diff block have neither a reference image nor an observed test (F-163). Every settable v0.14 feature has an affordance row in §5.1 — the visibility test passes — except the hidden-header states (F-158).
 
 ## 7. State and Failure Review
 
-The §3.1 lifecycle is complete, and the mermaid diagram is explicitly illustrative with the table normative — the correct arrangement; the diagram's edges all trace to table rows. Failure semantics are the document's strong suit: E-03 (unreadable file keeps the previous document), E-21 (transient/zero-byte read), E-25 (in-flight render cancellation) and C-14's "report in place, never modally, except two modal cases" form a coherent model. The v0.12 gaps are the two resolution holes (F-128's destructive clamp and F-130's unsat­isfiable predicate) and the contradictory snapshot rule (F-126).
+§3.1 was extended coherently: ⌘W, *Close All*, Next/Previous File and the totality note are all placed. Two gaps remain:
+
+- The state with **no document window** is unreachable in §3.1's model but reachable in the product (F-149).
+- *Close All* racing an in-flight load is unstated (F-155).
+
+Failure semantics for the new renderers are good:
+
+- **Web diagrams:** rejection, no SVG, no height, and no network are covered (E-34). The one deliberate gap — an on-screen spinner with no timeout — is stated.
+- **Print:** an empty document, a second ⌘P, a too-tall block, a double diagram failure and remote images are covered (E-33).
+- **`<img>`:** missing, empty, non-numeric sizes and odd schemes are covered (E-35).
 
 ## 8. Determinism and Algorithm Review
 
-Normative algorithms are deterministic and pinned: C-02's split rules (including the CRLF normalisation and the deliberate CommonMark deviations marked E-23), C-06.1/6.2's ordered sanitiser and repairs, C-07.1's delimiter rules, C-10's smartening exclusions, C-11's GitHub slug rule, C-03's query construction and total result order. Rounding and tie-breaking are specified where they matter (R-30's round-half-away, C-03's dual path tie-break, C-17's channel threshold and $q$ bound). C-19.2's range normalisation via $\min(a,b)$ is deterministic and correctly reverses a mis-ordered range. The determinism gap is C-19.1's `#L0` (F-128), where two implementations read the same rule to different values.
+The v0.14 algorithms are deterministic and fully ordered:
+
+- the §3.2 rewrite order (`<img>` → math → smart typography) is normative, and C-21 repeats it;
+- C-05.1's counters define exactly when a `---` line is a header;
+- C-20.2 fixes its dedent, fold and quote rules;
+- C-22.2's size function covers all four attribute combinations;
+- C-21.1's $s_p$ formula has its symbols defined and the degenerate case ($s_p = 1$ without a max width) stated;
+- K-17 and K-18 pin every constant.
+
+The two points of algorithmic doubt are print rhythm (F-160) and the YAML guard's treatment of `#` lines (F-150).
 
 ## 9. Edge-Case Review
 
-The edge-case table is unusually complete for this system: 31 rows covering unreadable files, missing fragments, math-that-is-not-math, glyph-less math, duplicate headings slug collisions, oversized content, and window lifecycle. Four v0.12-relevant boundaries are covered: past-`lineCount` and gap lines (E-31), `#L0` (E-31, but see F-128), empty document (C-19.3), and non-citation fragments (E-06). Missing: a line before the first block (F-130), and non-Markdown targets (F-133).
+E-32…E-37 are well chosen. The missing boundaries are:
+
+- zero document windows (F-149);
+- a BOM before the fence (F-166);
+- a multi-line directive (F-152);
+- `>` inside a quoted attribute (F-171);
+- a header that is empty, hidden, or contains `![` (F-150, F-158, F-159);
+- a `<img>` inside a heading (F-171).
 
 ## 10. Non-Functional Requirement Review
 
-Measurable and testable: K-15's idle-CPU protocol (warm-up, population, median and nearest-rank p95 thresholds) and T-32; K-14's byte/pixel ceilings with E-28; K-07's cache sizes; K-06's latency and tolerance constants; I-008's bitmap-backed requirement. Security and privacy are specified as boundary conditions rather than prose: C-16's header-free ephemeral session, R-35/I-003's no-document-bytes-out invariant, and the §0 trust-boundary statement. No finding.
+K-17…K-19 make the print, scrolling and web-diagram constants measurable. The print densities are justified by measurement in the source (432/864 ppi, edge-contrast figures). No performance bound is given for print pre-rendering or for a document with many web diagrams, each with its own `WKWebView`. That is acceptable implementation freedom for now, but a long `mermaid-web-fallback.md`-style document could stress memory. Consider a K-19 note on the maximum number of live web views, or lazy teardown.
 
 ## 11. Security and Trust-Boundary Review
 
-The trust boundary is stated (§0) and enforced by rows: K-14 before every third-party parser, C-06.1/C-07.2 sanitisers, I-002's no-termination invariant, R-41's ordered pre-checks, and C-16's redirect/type/size gates. The application never executes document content. v0.12 adds no new trust surface — line numbers are document-derived integers used only for index arithmetic — and C-19's resolution cannot be used to read outside the target file. No finding.
+This is the strongest part of the delta. The *Principle* and the §0 trust boundary are amended, not contradicted. I-001 and I-003 carry the exception explicitly. C-06.5 requires:
+
+- `securityLevel: 'strict'`;
+- no base URL;
+- refusal of every non-page load;
+- no private API.
+
+C-13 pins mermaid.js by SHA-256 and hard-fails on a mismatch. D-51 closes a real privacy hole in the original (an inline remote `<img>` fetched outside C-16). Remaining: WebKit console logging (F-164) and licence notices (F-165), both LOW.
 
 ## 12. Observability and Provenance Review
 
-R-35's "nothing document-derived is logged" is a deliberate constraint, and the three permitted diagnostics are enumerated. Provenance of *state* is good: history rows, indexed content with `file_mtime`, bookmarks with fingerprints, scroll positions with mtime, and a `schema_version` with a transactional `migrate()`. §11 maps every id to its realisation and test, and the front matter carries an explicit review/version history. The v0.12 rows break provenance in the one place it is cheap: their status (F-132).
+C-13's failure message names both digests, and `--print-pdf` emits per-block placement. The print and web paths otherwise log nothing, which R-35 requires. The provenance of the v0.14 rows is exact: each cites the original's commits up to `68aa008`, and the fixtures were carried over with the path changes recorded.
 
 ## 13. Testing and Verification Review
 
-Major requirements are testable; acceptance criteria are precise; the invariant set is verifiable (I-009 and I-014 are given measured oracles with tolerances, not vibes). The oracle-independence test passes: §9.6's expected result is a reference image or a person, and the harness's pixel metric is defined by C-17 with a stated tolerance, not by an implementation-produced golden. The `MDV6_SUPPORT_DIR` / `MDV6_DEFAULTS_SUITE` isolated-store rule keeps observed tests from touching the reader's state.
+Every v0.14 requirement has a test, and every pure contract has a unit half. The weaknesses:
 
-The v0.12 test is the exception and is the reason this review is not a blanket pass: T-49 fails the *test test* (two competent testers would disagree only because the fixture is wrong — F-129) and is misrouted between scripted and manual (F-134).
+- T-53's scripted oracles are under-defined (F-162).
+- R-45's inline-formula clause is untested (F-161).
+- The visual deliverables are not in the observed set and have no reference images (F-163).
+- T-42 misses the new key (F-168).
+- T-54 tests only the directive form that works (F-152).
+
+Negative cases are well represented: `frontmatter-negative.md`, a broken gantt, a corrupted mermaid.js, literal `<img>` in code, and focus pass-through for scrolling.
 
 ## 14. Metrics and Evaluation Review
 
-Every metric is a formula with defined symbols and a stated degenerate value: $\mathrm{ink}(P)$ with $\mathrm{ink}(P)=0$ when $D=\varnothing$; $w_{\mathrm{col}}$ with the 1 pt raster floor; the K-16 rhythm band $v \le g \le v + 0.6f$ with $v$ and $f$ defined and the $\max(\text{bottom}_i,\text{top}_{i+1})$ combination stated; C-17's threshold and mismatch fraction. Worked examples agree with their formulas — K-13's $860 - 80 - 12 = 768$ pt and the corresponding 732 pt raster match §7.2 at the K-10 defaults, and T-18 cites the same number. No finding.
+The only new formula is C-21.1's $s_p$, and it is well formed: symbols defined, a worked Letter value, and the degenerate case stated. Its **rationale** does not match K-13's definition of the column (F-170). No new aggregate metric is introduced.
 
 ## 15. Traceability Review
 
-The chain is complete and mechanically walked: `speccheck check` reports `0 dangling, 0 stale`, so every id cited is declared and every declared id is cited by at least one row. §11's "where realised" names this repository's files for every row. The three v0.12 ids resolve in §11 but point at code that does not exist yet and tests that do not exist — correct for specified work, but unmarked (F-132, F-137).
+The chain is complete for the delta:
+
+- every R-44…R-51 row has contracts, tests and a §11 row;
+- every §11 row is marked *not yet realised*;
+- D-46…D-53 cover every choice that departs from the original or has an alternative;
+- the revision history lists every amended row.
+
+Two *Affects* cells are incomplete (F-169).
 
 ## 16. Internal-Consistency Review
 
-This is where v0.12 fails. Cross-checking the new clauses against the rows that already owned the concepts they extend produced:
-
-- the R-18 ↔ R-19/C-19.4 contradiction (F-126);
-- the C-19.1 regex ↔ its own prose ↔ E-06 ↔ E-31 disagreement about `#L0` (F-128);
-- the "fragment" overload affecting E-22, E-29, R-21 and C-18.8 (F-127);
-- `blockLines`' three boundary statements (F-131);
-- §11's "every row is plain" against three rows that are not (F-132).
-
-Nothing in the pre-v0.12 document was found to contradict itself in this pass.
+Four normative conflicts were introduced: F-153, F-154, F-155 and F-157. Three rules are unqualified where they now need scoping: R-11, K-07 and I-005 (F-156). §3.2's diagram agrees with the table rows and C-06.4. The §3.1 diagram's new edge ("last row deleted or closed, or Close All") is backed by R-47 and the `VIEWING`/`EMPTY` rows. The mermaid block in §3.2 declares `F` before its first edge, so it renders.
 
 ## 17. Architecture Review
 
-The architecture supports the requirements. §3.2's per-block pipeline is a faithful map of the constraints: math rewriting before smartening (§3.2 and R-17 agree), sanitiser before parser (I-002), cache keys including every input that changes output (C-05, C-11's cache key, R-11's three-part key). Dependency direction is one-way into the third-party renderers, each behind an owned repair layer. C-19 is architecturally honest about its own limit: it states that block granularity is the smallest addressable unit and why, rather than implying line-accurate highlighting is available (D-44). That is the correct treatment; the defect is the inconsistency of the clauses around it, not the design.
+The architecture supports the requirements:
+
+- print reuses the screen pipeline, with a pre-pass for asynchronous content;
+- the web path is a leaf renderer behind C-06.4's dispatch;
+- frontmatter is a split-level concern with view-level display.
+
+Vendoring MarkdownUI (D-49) is the minimum change that makes C-21.4 possible, and I-016/T-62 keep it auditable. The one architectural gap is the web view's integration with the host view hierarchy: events, focus and menus (F-151).
 
 ## 18. Implementation-Agent Readiness
 
-**Verdict: `READY WITH MINOR FIXES`** for the specification as a whole; **`NO — MATERIAL QUESTIONS REMAIN`** for C-19/T-49.
+**NO — MATERIAL QUESTIONS REMAIN** for the v0.14 rows. The pre-v0.14 document remains **YES — WITH MINOR CLARIFICATIONS**.
 
-Minimum blocking questions, all answerable by the edits above:
+Minimum blocking questions:
 
-1. Does a same-document line-citation jump push a back snapshot — R-18 says yes for "a `#fragment` link", C-19.4/R-19 say no? (F-126)
-2. Is `#L0` a citation (scroll + flash) or not (E-06 no-op) — the grammar and the prose disagree? (F-128)
-3. Does a line citation that lands on a TOC heading select the TOC row? (F-127, with E-29/R-21/C-18.8)
-4. Which source line does `#L10-L12` against `links-sibling.md` target — the test's stated paragraph, or the heading the rule produces? (F-129)
-5. Is `blockLines[i].upperBound` the block's last line or one past it? (F-131)
+1. With no document window, what do an open event, ⌘O and a Dock click do? (F-149)
+2. Must a web-path diagram suppress WebKit's context menu, forward wheel events, and refuse first responder? (F-151)
+
+Non-blocking but likely to be asked:
+
+- print rhythm (F-160);
+- hidden-header anchoring and title (F-158);
+- multi-line directives (F-152);
+- the inline blocked `<img>` (F-157).
 
 ## 19. Quality Scorecard
 
 | Dimension | Score |
 | --------- | ----: |
 | Scope clarity | 5 |
-| Terminology | 3 |
+| Terminology | 4 |
 | Requirement precision | 4 |
 | Interface completeness | 4 |
-| Visual-surface completeness | 5 |
-| Data-contract completeness | 3 |
-| State/lifecycle definition | 4 |
+| Visual-surface completeness | 3 |
+| Data-contract completeness | 4 |
+| State/lifecycle definition | 3 |
 | Algorithm precision | 4 |
-| Failure semantics | 5 |
+| Failure semantics | 4 |
 | Edge-case coverage | 4 |
-| Non-functional requirements | 5 |
+| Non-functional requirements | 4 |
 | Security specification | 5 |
 | Observability/provenance | 4 |
-| Testability | 4 |
+| Testability | 3 |
 | Evaluation/metrics | 5 |
-| Traceability | 3 |
+| Traceability | 4 |
 | Internal consistency | 3 |
-| Architecture consistency | 5 |
+| Architecture consistency | 4 |
 | Implementation readiness | 3 |
 
-Seven dimensions score 5; the four 3s (terminology, data contracts, traceability, internal consistency) are each depressed by the same single cause — the v0.12 delta — which is why the remediation below is short and mechanical.
+Compared with the seventh review, terminology, data contracts and traceability recover to 4, since F-126…F-138 were applied. Visual-surface completeness drops from 5 to 3, because the new surfaces lack reference images and observed tests (F-163). State/lifecycle drops to 3 because of the zero-window gap (F-149). Testability stays at 3 because of F-161/F-162.
 
 ## 20. Remediation Plan
 
 ### P0 — Blocking
 
-1. **F-126** — amend R-18 to exclude a line-citation jump from the snapshot rule. *(one clause)*
-2. **F-128** — change C-19.1's grammar to `[1-9][0-9]*`, or add the mandatory $a \ge 1$ guard; then E-06 and E-31 agree without further edits. *(one regex)*
-3. **F-129** — re-derive T-49's cited line from `nl -ba test-docs/links-sibling.md` and fix the fixture or the expectation, naming the resolved block explicitly. *(one clause plus a fixture line)*
+1. **F-149** — add the no-document-window clause to R-01, with E-38 and a T-61 case. *(one clause, one row, one test clause)*
+2. **F-151** — add the web view's context-menu, wheel, first-responder and selection rules to C-06.5, with T-54 clauses. *(four bullets)*
 
 ### P1 — Important
 
-4. **F-127** — introduce "slug fragment" / "line citation" and apply it in E-22, E-29, C-18.8, R-18. *(four rows)*
-5. **F-130** — make C-02 rule 8's resolution total for a line before the first block, and add the case to E-31. *(one clause, two rows)*
-6. **F-131** — state the half-open convention once in C-02 rule 8; reduce the field comment to a pointer. *(two clauses)*
-7. **F-132** — mark C-19, E-31, T-49 *not yet realised*; replace §11's blanket sentence with the current state. *(three rows plus one sentence)*
-8. **F-133** — pin C-19's scope to in-app destinations and record the non-Markdown boundary in D-44. *(one sentence)*
-9. **F-134** — split T-49's scripted half into a `mdv6Tests` case and add the flash to §9.6's observed set. *(one test row, one sentence)*
+3. **F-153, F-154, F-155** — add the three missing exceptions to R-08, R-06 (and the `LOADING` row), and E-26; cancel in-flight loads on *Close All*. *(four clauses)*
+4. **F-157** — state the inline blocked-remote placeholder in C-22.2 and R-16. *(one sentence each)*
+5. **F-156** — scope R-11/K-07 to native diagrams and state the web width rule in C-06.5. *(two clauses)*
+6. **F-158, F-159** — the hidden-header rules in R-44 and the verbatim inline path in R-24; extend T-52. *(one paragraph, one clause)*
+7. **F-150, F-152** — the zero-row rule in C-20.1 (record it in D-48), and a C-06.1 directive-stripping rule; extend T-52/T-54. *(two rules)*
+8. **F-160, F-161, F-162** — print rhythm in C-21.2; restate R-45's inline clause as an outcome; enrich the `--print-pdf` JSON and T-53's oracles. *(one clause, one sentence, one C-17 row, T-53 rewrite)*
+9. **F-163** — add the v0.14 visual tests to §9.6 and check in reference images from the original. *(one sentence, four images)*
 
 ### P2 — Improvement
 
-10. **F-135, F-136, F-137, F-138** — relabel K-06's constant; move C-19 out of the §5.5 heading; reword C-19.3's TOC analogy and extend D-44's *Affects*; name T-49's empty-document fixture.
+10. **F-164…F-172** — mermaid `logLevel` and R-35/T-36 scope; licence notices; BOM and the rule 9 claim; C-09 fields; T-42 key and C-17 `expect`; the D-50/D-46 *Affects* cells; C-21.1's rationale and "empty"; quoted `>` and `<img>` in C-12; T-53's flash wording.
 
-No redesign is recommended. Every finding above is an edit to text the v0.12 change should have carried with it.
+No redesign is recommended. Every finding is an edit to the v0.14 text, or to a pre-v0.14 row that the delta should have amended alongside it.
 
 ## 21. Final Verdict
 
@@ -589,11 +769,11 @@ Specification maturity:
 Level 3
 
 Implementation readiness:
-READY WITH MINOR FIXES
+NOT READY
 
 Primary blocker:
-R-18 and R-19/C-19.4 state contradictory rules for whether a same-document line-citation jump pushes a back snapshot.
+The spec gives no behaviour for open events and menu commands when no document window exists (F-149), and leaves the web view's context menu, scrolling and focus to WebKit's defaults (F-151).
 
 Most important improvement:
-Amend R-18, tighten the C-19.1 grammar to reject `#L0`, and re-derive T-49's citation from the actual line numbering of its fixture — after which the v0.12 addition meets the same implementation-grade bar as the rest of the document.
+Add the zero-window rule to R-01 and the web-view interaction rules to C-06.5, then carry the four missing exceptions into R-06, R-08, E-26 and C-22.2 — after which the v0.14 delta meets the implementation-grade bar of the rest of the document.
 ```
