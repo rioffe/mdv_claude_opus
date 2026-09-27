@@ -304,6 +304,13 @@ extension RGBA {
 /// Locates bundled resources: the flat `Contents/Resources` layout of the app bundle (C-01/C-13) first, then the
 /// SwiftPM resource bundle (`swift run`, `swift test`).
 public enum Resources {
+    /// A file copied flat into the app bundle's `Resources/` by `build.sh` (C-13), or nil outside the app.
+    public static func flatURL(file: String) -> URL? {
+        guard let main = Bundle.main.resourceURL else { return nil }
+        let url = main.appendingPathComponent(file)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
     public static func url(file: String, subdirectory: String?) -> URL? {
         if let main = Bundle.main.resourceURL {
             let flat = main.appendingPathComponent(file)

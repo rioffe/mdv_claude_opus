@@ -190,4 +190,20 @@ final class BuildAndLauncherTests: XCTestCase {
         XCTAssertEqual(bundle, ["GUST-FONT-LICENSE.txt", "LICENSE", "OFL.txt", "latinmodern-math.otf", "latinmodern-math.plist"])
         XCTAssertTrue(readme.contains("fa8244ed032f4a1ade4cb0571bf87d2f1a9fd2d7"))
     }
+
+    /// C-13, K-19, R-34, R-46 (T-54 build clause): the pinned mermaid.js is verified by SHA-256; a corrupted copy fails
+    /// with both digests named and exit 1; the built bundle carries the verified script and its licence flat.
+    func testMermaidScriptPinned() throws {
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("mermaid-\(UUID().uuidString).js")
+        try Data("not mermaid".utf8).write(to: tmp)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        let bad = run("/bin/bash", ["tools/fetch-mermaid.sh", "verify", tmp.path])
+        XCTAssertEqual(bad.status, 1)
+        XCTAssertTrue((bad.out + bad.err).contains("a43bc1afd446f9c4cc66ac5dd45d02e8d65e26fc5344ec0ef787f88d6ddb6f9e"), "expected digest named")
+        XCTAssertTrue((bad.out + bad.err).contains("actual"), "actual digest named")
+        let script = app.appendingPathComponent("Contents/Resources/mermaid.min.js")
+        let good = run("/bin/bash", ["tools/fetch-mermaid.sh", "verify", script.path])
+        XCTAssertEqual(good.status, 0, good.out + good.err)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: app.appendingPathComponent("Contents/Resources/mermaid.LICENSE.txt").path))
+    }
 }

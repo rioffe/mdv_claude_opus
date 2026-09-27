@@ -19,6 +19,11 @@ public struct FenceParts: Equatable {
         if let last = lines.last, last.drop(while: { $0 == " " || $0 == "\t" }).hasPrefix(marker) { lines.removeLast() }
         code = lines.joined(separator: "\n")
     }
+
+    /// The bodies of every ` ```mermaid ` fence in a document, in order (tests, print).
+    public static func mermaidSources(in markdown: String) -> [String] {
+        ParsedDocument(raw: markdown).blocks.filter { BlockKind(block: $0) == .mermaidFence }.map { FenceParts(block: $0).code }
+    }
 }
 
 public struct CodeBlockChrome: View {

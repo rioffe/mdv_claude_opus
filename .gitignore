@@ -6,3 +6,6 @@ junit.xml
 junit-swift-testing.xml
 *.xcodeproj
 .DS_Store
+
+# C-13: fetched by tools/fetch-mermaid.sh and SHA-256-verified; never committed
+Vendor/mermaid/mermaid.min.js

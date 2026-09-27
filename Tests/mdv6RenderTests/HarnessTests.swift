@@ -15,7 +15,7 @@ final class HarnessTests: XCTestCase {
     override func tearDown() { try? FileManager.default.removeItem(at: out) }
 
     /// T-13, C-17, R-39: `--scan` discovers every raw `.mmd` and every Mermaid fence in `.md`, ordered by UTF-8 bytes of the
-    /// relative path then fence index; E-02 unsupported types report `fallback`, everything else `pass`; a second run
+    /// relative path then fence index; web-dispatched cases (C-06.4) report `web`, everything else `pass`; a second run
     /// yields identical records and identical PNG bytes (I-001).
     func testScanCorpusOrderAndDeterminism() throws {
         let corpus = Self.root.appendingPathComponent("test-docs/mermaid")
@@ -25,7 +25,7 @@ final class HarnessTests: XCTestCase {
                                           "unsupported-pie.mmd", "unsupported-timeline.mmd", "xychart.mmd"])
         XCTAssertEqual(Set(cases.map(\.outputName)).count, cases.count, "collision-free outputs")
         let first = try HarnessRunner.runScan(root: corpus, outputDir: out.appendingPathComponent("a"))
-        XCTAssertEqual(first.map(\.status.rawValue), ["pass", "pass", "pass", "fallback", "pass", "pass", "pass", "pass", "pass", "pass", "fallback", "fallback", "fallback", "fallback", "pass"])
+        XCTAssertEqual(first.map(\.status.rawValue), ["pass", "pass", "pass", "web", "pass", "pass", "pass", "pass", "pass", "pass", "web", "web", "web", "web", "pass"])   // C-17: web-dispatched cases report `web`
         let second = try HarnessRunner.runScan(root: corpus, outputDir: out.appendingPathComponent("b"))
         XCTAssertEqual(first.map { ($0.id, $0.status) }.map { "\($0.0):\($0.1)" }, second.map { "\($0.id):\($0.status)" })
         for r in first where r.status == .pass {
@@ -64,7 +64,7 @@ final class HarnessTests: XCTestCase {
         for id in ["mermaid-math-ink", "sequence-layout", "rhythm-sevilla", "rhythm-charcoal", "display-math-single-vs-fence", "unsupported-pie"] {
             let r = try HarnessRunner.runCheck(manifest: manifest, root: Self.root, outputDir: out, only: id)
             XCTAssertEqual(r.count, 1)
-            XCTAssertEqual(r[0].status, id.hasPrefix("unsupported") ? .fallback : .pass, "\(id): \(r[0].diagnostics)")
+            XCTAssertEqual(r[0].status, id.hasPrefix("unsupported") ? .web : .pass, "\(id): \(r[0].diagnostics)")
         }
     }
 

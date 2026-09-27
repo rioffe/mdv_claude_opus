@@ -12,7 +12,7 @@ public struct HarnessManifest: Codable {
 
 public struct HarnessCase: Codable, Equatable {
     public enum Kind: String, Codable { case markdown, mermaid }
-    public enum Expectation: String, Codable { case render, fallback }
+    public enum Expectation: String, Codable { case render, fallback, web }
     public enum Metric: String, Codable { case pixel, ink, sequenceLayout = "sequence-layout", rhythm, displayMath = "display-math" }
     public var id: String
     public var input: String
@@ -25,9 +25,9 @@ public struct HarnessCase: Codable, Equatable {
     public var theme: String?
 }
 
-/// One JSON record per case: `id`, `status` (`pass`/`fail`/`fallback`), `output`.
+/// One JSON record per case: `id`, `status` (`pass`/`fail`/`fallback`/`web`), `output`.
 public struct CaseResult: Equatable {
-    public enum Status: String { case pass, fail, fallback }
+    public enum Status: String { case pass, fail, fallback, web }
     public let id: String
     public let status: Status
     public let output: String?
@@ -125,8 +125,8 @@ public enum HarnessRunner {
         return cases
     }
 
-    /// Renders every scanned case into `outputDir`; E-02 unsupported types are expected fallbacks (`fallback`), every
-    /// other fallback is `fail`, a rendered diagram is `pass`.
+    /// Renders every scanned case into `outputDir`. C-17: a case C-06.4 dispatches to the web path is not rendered (the
+    /// harness is offline and hosts no WebKit) and reports `web`; a native fallback is `fail`; a rendered diagram `pass`.
     @MainActor
     public static func runScan(root: URL, outputDir: URL, width: CGFloat = 860, scale: CGFloat = 2, themeId: String = "high-contrast") throws -> [CaseResult] {
         guard let theme = ThemeCatalog.theme(id: themeId) else { throw HarnessError.unknownTheme(themeId) }
@@ -134,6 +134,7 @@ public enum HarnessRunner {
         var o = DocumentRenderer.Options(); o.width = width; o.scale = scale; o.theme = theme
         return scan(root: root).map { c in
             let out = outputDir.appendingPathComponent(c.outputName)
+            if !MermaidDispatch.isNative(c.source) { return CaseResult(id: c.id, status: .web, output: nil, diagnostics: ["web path (C-06.4)"]) }
             switch DocumentRenderer.render(mermaid: c.source, options: o) {
             case .rendered(let image):
                 guard let png = DocumentRenderer.png(image), (try? png.write(to: out)) != nil else {
@@ -141,8 +142,7 @@ public enum HarnessRunner {
                 }
                 return CaseResult(id: c.id, status: .pass, output: out.path, diagnostics: [])
             case .fallback(let reason):
-                let expected = reason.hasPrefix("unsupported diagram type")
-                return CaseResult(id: c.id, status: expected ? .fallback : .fail, output: nil, diagnostics: [reason])
+                return CaseResult(id: c.id, status: .fail, output: nil, diagnostics: [reason])        // E-02: a native failure
             }
         }
     }
@@ -182,6 +182,10 @@ public enum HarnessRunner {
         var image: NSImage? = nil
         var prepared: MDVMermaidPrepared? = nil
         var fallbackReason: String? = nil
+        let expect = c.expect ?? .render
+        if c.kind == .mermaid, !MermaidDispatch.isNative(text) {                 // C-17: web cases are not rendered offline
+            return CaseResult(id: c.id, status: expect == .web ? .web : .fail, output: nil, diagnostics: ["web path (C-06.4)"])
+        }
         switch c.kind {
         case .mermaid:
             switch DocumentRenderer.render(mermaid: text, options: o) {
@@ -192,7 +196,6 @@ public enum HarnessRunner {
         case .markdown:
             do { image = try DocumentRenderer.render(markdown: text, options: o) } catch { fallbackReason = "\(error)" }
         }
-        let expect = c.expect ?? .render
         if let fallbackReason {
             diagnostics.append(fallbackReason)
             return CaseResult(id: c.id, status: expect == .fallback ? .fallback : .fail, output: nil, diagnostics: diagnostics)

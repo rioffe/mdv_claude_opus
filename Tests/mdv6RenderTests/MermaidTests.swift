@@ -311,4 +311,13 @@ final class MermaidTests: XCTestCase {
         } }
         return false
     }
+
+    /// R-09, R-46: a web-dispatched diagram's controls offer *Show Mermaid Source* and copy, never the style menu or
+    /// the PNG export; a native one offers all four. T-21, T-54.
+    func testWebPathChrome() {
+        XCTAssertEqual(MermaidCodeBlockChrome.controls(for: "gantt\n  title x"), [.showSource, .copy])
+        XCTAssertEqual(MermaidCodeBlockChrome.controls(for: "flowchart LR\n A-->B"), [.style, .showSource, .export, .copy])
+        XCTAssertEqual(MermaidCodeBlockChrome.contextMenu(for: "pie\n \"a\": 1"), ["Copy Code", "Show Mermaid Source"])
+        XCTAssertEqual(MermaidCodeBlockChrome.contextMenu(for: "graph TD\n A-->B"), ["Copy Code", "Show Mermaid Source", "Diagram Style", "Export Diagram as PNG"])
+    }
 }

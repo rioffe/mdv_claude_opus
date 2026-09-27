@@ -6,6 +6,7 @@ case "$CONFIG" in debug|release) ;; *) echo "usage: build.sh {debug|release}" >&
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
+bash tools/fetch-mermaid.sh ensure                 # C-13: the pinned, verified mermaid.js (R-46)
 swift build -c "$CONFIG" --product mdv6
 BIN="$(swift build -c "$CONFIG" --show-bin-path)"
 
@@ -22,6 +23,8 @@ cp -R Vendor/SwiftMath/Sources/SwiftMath/mathFonts.bundle "$APP/Contents/Resourc
 cp bin/mdv6 "$APP/Contents/Resources/mdv6"
 chmod +x "$APP/Contents/Resources/mdv6"
 cp mdv6/Help.md "$APP/Contents/Resources/Help.md"
+cp Vendor/mermaid/mermaid.min.js "$APP/Contents/Resources/mermaid.min.js"      # C-13, K-19
+cp Vendor/mermaid/LICENSE.txt "$APP/Contents/Resources/mermaid.LICENSE.txt"
 # SwiftPM resource bundle for mdv6Core (fonts/queries/Help are also copied flat above so C-01's layout holds).
 if [ -d "$BIN/mdv6_mdv6Core.bundle" ]; then cp -R "$BIN/mdv6_mdv6Core.bundle" "$APP/Contents/Resources/"; fi
 

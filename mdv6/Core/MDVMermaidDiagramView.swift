@@ -139,6 +139,21 @@ public struct MermaidCodeBlockChrome: View {
 
     static let styleNames: [MermaidStyle: String] = [.document: "Document", .light: "Light", .dark: "Dark", .tokyoNight: "Tokyo Night", .catppuccin: "Catppuccin"]
 
+    /// R-09 hover-capsule controls.
+    public enum Control: Equatable { case style, showSource, export, copy }
+
+    /// R-09, R-46: the web path has no style menu and no export (it honours only light/dark, C-06.5).
+    public static func controls(for source: String) -> [Control] {
+        MermaidDispatch.isNative(source) ? [.style, .showSource, .export, .copy] : [.showSource, .copy]
+    }
+
+    /// §5.1 / R-09: the block's context menu (on the web path the only menu, never WebKit's — F-151).
+    public static func contextMenu(for source: String) -> [String] {
+        MermaidDispatch.isNative(source) ? ["Copy Code", "Show Mermaid Source", "Diagram Style", "Export Diagram as PNG"] : ["Copy Code", "Show Mermaid Source"]
+    }
+
+    private var isNative: Bool { MermaidDispatch.isNative(source) }
+
     public var body: some View {
         ZStack(alignment: .topTrailing) {
             Group {
@@ -147,22 +162,27 @@ public struct MermaidCodeBlockChrome: View {
                     Text(source).font(.system(size: 0.85 * documentTheme.baseFontSize, design: .monospaced))
                         .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
                         .padding(16).background(documentTheme.secondaryBackground).clipShape(RoundedRectangle(cornerRadius: 6))
-                } else {
+                } else if isNative {
                     MDVMermaidDiagramView(source: source, documentTheme: documentTheme, style: style, columnWidth: columnWidth,
                                           backingScale: backingScale, generation: generation) { lastOutcome = $0 }
+                        .padding(.vertical, 8)
+                } else {
+                    // R-46 / C-06.5: the web path; E-02: a native failure is never retried here
+                    MermaidWebContainer(source: source, theme: documentTheme,
+                                        menuItems: [("Copy Code", { Pasteboard.copy(source) }), ("Show Mermaid Source", { showSource = true })])
                         .padding(.vertical, 8)
                 }
             }
             if hovering {
                 HStack(spacing: 8) {
-                    Menu {
+                    if isNative { Menu {
                         ForEach(MermaidStyle.allCases, id: \.self) { s in
                             Button { onStyleChange(s) } label: { if s == style { Label(Self.styleNames[s]!, systemImage: "checkmark") } else { Text(Self.styleNames[s]!) } }
                         }
-                    } label: { Image(systemName: "paintpalette") }.help("Diagram Style")
+                    } label: { Image(systemName: "paintpalette") }.help("Diagram Style") }
                     Button { showSource.toggle() } label: { Image(systemName: showSource ? "photo" : "chevron.left.forwardslash.chevron.right") }
                         .help(showSource ? "Show Diagram" : "Show Mermaid Source")
-                    Button { export() } label: { Image(systemName: "square.and.arrow.up") }.help("Export Diagram as PNG")
+                    if isNative { Button { export() } label: { Image(systemName: "square.and.arrow.up") }.help("Export Diagram as PNG") }
                     Button { Pasteboard.copy(source) } label: { Image(systemName: "doc.on.doc") }.help("Copy Code")
                 }
                 .buttonStyle(.plain).menuStyle(.borderlessButton).menuIndicator(.hidden)
@@ -177,10 +197,12 @@ public struct MermaidCodeBlockChrome: View {
         .contextMenu {
             Button("Copy Code") { Pasteboard.copy(source) }
             Button(showSource ? "Show Diagram" : "Show Mermaid Source") { showSource.toggle() }
-            Menu("Diagram Style") {
-                ForEach(MermaidStyle.allCases, id: \.self) { s in Button(Self.styleNames[s]!) { onStyleChange(s) } }
+            if isNative {
+                Menu("Diagram Style") {
+                    ForEach(MermaidStyle.allCases, id: \.self) { s in Button(Self.styleNames[s]!) { onStyleChange(s) } }
+                }
+                Button("Export Diagram as PNG") { export() }
             }
-            Button("Export Diagram as PNG") { export() }
         }
     }
 

@@ -16,9 +16,9 @@
     { "id": "class-pixel", "input": "test-docs/mermaid/class.mmd", "kind": "mermaid", "width": 860, "scale": 2, "expect": "render", "golden": "test-docs/goldens/class-pixel.png", "metric": "pixel" },
     { "id": "er-pixel", "input": "test-docs/mermaid/er.mmd", "kind": "mermaid", "width": 860, "scale": 2, "expect": "render", "golden": "test-docs/goldens/er-pixel.png", "metric": "pixel" },
     { "id": "math-pixel", "input": "test-docs/mermaid/math.mmd", "kind": "mermaid", "width": 860, "scale": 2, "expect": "render", "golden": "test-docs/goldens/math-pixel.png", "metric": "pixel" },
-    { "id": "unsupported-timeline", "input": "test-docs/mermaid/unsupported-timeline.mmd", "kind": "mermaid", "expect": "fallback" },
-    { "id": "unsupported-gantt", "input": "test-docs/mermaid/unsupported-gantt.mmd", "kind": "mermaid", "expect": "fallback" },
-    { "id": "unsupported-pie", "input": "test-docs/mermaid/unsupported-pie.mmd", "kind": "mermaid", "expect": "fallback" },
-    { "id": "unsupported-mindmap", "input": "test-docs/mermaid/unsupported-mindmap.mmd", "kind": "mermaid", "expect": "fallback" }
+    { "id": "unsupported-timeline", "input": "test-docs/mermaid/unsupported-timeline.mmd", "kind": "mermaid", "expect": "web" },
+    { "id": "unsupported-gantt", "input": "test-docs/mermaid/unsupported-gantt.mmd", "kind": "mermaid", "expect": "web" },
+    { "id": "unsupported-pie", "input": "test-docs/mermaid/unsupported-pie.mmd", "kind": "mermaid", "expect": "web" },
+    { "id": "unsupported-mindmap", "input": "test-docs/mermaid/unsupported-mindmap.mmd", "kind": "mermaid", "expect": "web" }
   ]
 }

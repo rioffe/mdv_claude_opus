@@ -47,7 +47,7 @@ let package = Package(
                 "CGrammars",
             ],
             path: "mdv6",
-            exclude: ["Grammars", "Info.plist", "mdv6.entitlements", "AppIcon.icns", "Fonts/README.md", "mermaid.LICENSE.txt"],   // the licence is bundled by build.sh (C-13)
+            exclude: ["Grammars", "Info.plist", "mdv6.entitlements", "AppIcon.icns", "Fonts/README.md"],
             sources: ["Core"],
             resources: [
                 .copy("Fonts"),
