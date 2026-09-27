@@ -27,11 +27,11 @@ SWIFT
     ls build/observed/"$name"*.png >/dev/null 2>&1 && echo "snapshot hook → $(ls build/observed/"$name"*.png | tr '\n' ' ')" || { echo "no snapshot written"; exit 1; }
     ;;
   drive)
-    # tools/observe.sh drive command <AppCommand raw value> | drive action <name> [index]
-    kind="${2:?command|action}"; value="${3:?value}"; index="${4:-0}"; path="${5:-}"
+    # tools/observe.sh drive command <AppCommand raw value> | drive action <name> [index] [path] [mods: ctrl,shift,cmd]
+    kind="${2:?command|action}"; value="${3:?value}"; index="${4:-0}"; path="${5:-}"; mods="${6:-}"
     swift - <<SWIFT
 import Foundation
-DistributedNotificationCenter.default().postNotificationName(Notification.Name("mdv6.drive"), object: nil, userInfo: ["$kind": "$value", "index": "$index", "path": "$path"], deliverImmediately: true)
+DistributedNotificationCenter.default().postNotificationName(Notification.Name("mdv6.drive"), object: nil, userInfo: ["$kind": "$value", "index": "$index", "path": "$path", "mods": "$mods"], deliverImmediately: true)
 SWIFT
     sleep 0.8 ;;
   quit)

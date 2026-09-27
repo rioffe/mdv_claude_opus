@@ -197,4 +197,22 @@ final class ChromeModelTests: XCTestCase {
     }
 
     final class NoWatch: FileWatching { func cancel() {} }
+
+    /// R-49, E-37, K-18: the document takes a scroll key only with no ⌘/⌥/⌃ and when the first responder is nothing, the
+    /// window, or a non-editable text view; a field, the list or a focused control keeps it. T-57.
+    func testScrollKeyOwnership() {
+        XCTAssertTrue(ScrollKeys.documentOwnsKey(responder: .none, modifiers: []))
+        XCTAssertTrue(ScrollKeys.documentOwnsKey(responder: .window, modifiers: [.shift]))
+        XCTAssertTrue(ScrollKeys.documentOwnsKey(responder: .readOnlyText, modifiers: []))
+        XCTAssertFalse(ScrollKeys.documentOwnsKey(responder: .editableText, modifiers: []))
+        XCTAssertFalse(ScrollKeys.documentOwnsKey(responder: .other, modifiers: []))
+        for m: NSEvent.ModifierFlags in [.command, .option, .control] {
+            XCTAssertFalse(ScrollKeys.documentOwnsKey(responder: .none, modifiers: m))
+        }
+        // R-48: ⌃⇥ / ⌃⇧⇥ only with Control held; plain and ⇧-only Tab pass through.
+        XCTAssertEqual(ScrollKeys.fileStep(keyCode: 48, modifiers: [.control]), 1)
+        XCTAssertEqual(ScrollKeys.fileStep(keyCode: 48, modifiers: [.control, .shift]), -1)
+        XCTAssertNil(ScrollKeys.fileStep(keyCode: 48, modifiers: []))
+        XCTAssertNil(ScrollKeys.fileStep(keyCode: 48, modifiers: [.shift]))
+    }
 }

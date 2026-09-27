@@ -21,7 +21,7 @@ public final class BookmarksManager: ObservableObject {
     @discardableResult
     public func add(path: String, document: ParsedDocument, index: Int) -> Database.BookmarkRow? {
         let i = document.blocks.isEmpty ? 0 : min(max(index, 0), document.blocks.count - 1)
-        let title = BookmarkTitle.title(blocks: document.blocks, toc: document.tocHeadings, index: i)
+        let title = BookmarkTitle.title(blocks: document.blocks, toc: document.tocHeadings, index: i, hasFrontmatter: document.frontmatter != nil)
         let fingerprint = document.blocks.isEmpty ? "" : bookmarkFingerprint(document.blocks[i])
         let row = database.addBookmark(path: path, title: title, blockIndex: i, fingerprint: fingerprint)
         reload()

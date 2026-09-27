@@ -19,28 +19,76 @@ public final class AppEnvironment: ObservableObject {
     /// R-40: URLs handed over by LaunchServices before the main window restored its history head.
     var pendingOpen: [URL] = []
     var launched = false
+    /// E-38: what a window created on demand does first, and how to create one (captured from the commands' environment).
+    var pendingWindowActions: [(DocumentSession) -> Void] = []
+    var openWindow: OpenWindowAction?
 
-    private init() { model = AppModel.bootstrap() }
+    private init() {
+        model = AppModel.bootstrap()
+        let m = model
+        CommandCenter.targetWindow = { m.targetWindow }                   // R-01
+    }
+
+    /// E-38 (F-178): with no document window, create one only when the action has a file, then run the action in it;
+    /// otherwise beep (a missing bookmark or placeholder) or do nothing (a cancelled panel).
+    func onDemand(_ action: AppModel.DemandAction, beepIfNot: Bool = false, _ run: @escaping (DocumentSession) -> Void) {
+        guard model.needsWindow(for: action) else { if beepIfNot { NSSound.beep() }; return }
+        pendingWindowActions.append(run)
+        openWindow?(id: "blank")
+    }
+
+    /// §5.1 with E-38: a command reaches the target window, or — with no document window — creates one when it has a file.
+    func dispatch(_ command: AppCommand) {
+        if model.hasDocumentWindow { CommandCenter.post(command); return }
+        switch command {
+        case .openFile, .openInNewWindow:
+            let panel = NSOpenPanel()
+            panel.canChooseDirectories = true; panel.allowsMultipleSelection = true; panel.allowsOtherFileTypes = true
+            let urls = panel.runModal() == .OK ? panel.urls : []
+            onDemand(.openURLs(urls)) { $0.open(urls: urls) }
+        case .jumpToPlaceholder: onDemand(.placeholder, beepIfNot: true) { $0.jumpToPlaceholder() }
+        case .slot1, .slot2, .slot3, .slot4, .slot5:
+            let n = [AppCommand.slot1, .slot2, .slot3, .slot4, .slot5].firstIndex(of: command)! + 1
+            guard let row = model.bookmarks.slot(n) else { return }
+            onDemand(.bookmark(row), beepIfNot: true) { $0.openBookmark(row) }
+        case .help: onDemand(.help) { HelpManager.openHelp(in: $0) }
+        default: break                                                    // window-scoped: disabled with no window
+        }
+    }
 }
 
 public final class mdv6AppDelegate: NSObject, NSApplicationDelegate {
     /// E-30: no state restoration.
     public func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { false }
-    public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    /// R-47 / E-38: closing the last window leaves the application running.
+    public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     public func applicationWillFinishLaunching(_ notification: Notification) {
         UserDefaults.standard.register(defaults: ["NSQuitAlwaysKeepsWindows": false, "ApplePersistenceIgnoreState": true])
     }
 
-    /// R-01 / R-40: an open event goes to the key window; before the main window has started, it is the cold-start argument.
+    /// R-01 / R-40: an open event goes to the target window; before the main window has started, it is the cold-start
+    /// argument; with no document window, a window is created for it (E-38). The application is never activated here:
+    /// LaunchServices activates it for an ordinary open, and `open -g` must leave the frontmost application frontmost;
+    /// only an already-active application brings the target window forward.
     public func application(_ application: NSApplication, open urls: [URL]) {
         let env = AppEnvironment.shared
-        if env.launched { env.model.handleOpenEvent(urls: urls) } else { env.pendingOpen += urls }
+        guard env.launched else { env.pendingOpen += urls; return }
+        guard env.model.hasDocumentWindow else { env.onDemand(.openURLs(urls)) { $0.open(urls: urls) }; return }
+        env.model.handleOpenEvent(urls: urls)
+        if NSApp.isActive, let w = env.model.targetWindow { w.makeKeyAndOrderFront(nil) }
+    }
+
+    /// E-38: a Dock click with no window creates one that follows R-40 (the history head, or `EMPTY`).
+    public func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        let env = AppEnvironment.shared
+        guard env.launched, !env.model.hasDocumentWindow else { return true }
+        env.onDemand(.dockReopen) { $0.restoreOnLaunch() }
+        return false
     }
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.setActivationPolicy(.regular)                                  // R-01: no explicit activation (open -g)
     }
 }
 
@@ -67,6 +115,14 @@ struct Mdv6App: App {
         .windowToolbarStyle(.unified)
         .defaultSize(width: 1280, height: 820)
         .handlesExternalEvents(matching: [])
+
+        // E-38: a window created on demand when none exists; it runs the pending action (open, bookmark, ⌘0, Help, Dock).
+        WindowGroup(id: "blank") {
+            BlankWindowContent()
+        }
+        .windowToolbarStyle(.unified)
+        .defaultSize(width: 1280, height: 820)
+        .handlesExternalEvents(matching: [])
     }
 
     // MARK: §5.1 menus
@@ -76,8 +132,8 @@ struct Mdv6App: App {
             Button("Install Command Line Tool…") { CLIInstaller.install() }
         }
         CommandGroup(replacing: .newItem) {
-            Button("Open…") { CommandCenter.post(.openFile) }.keyboardShortcut("o", modifiers: .command)
-            Button("Open in New Window…") { CommandCenter.post(.openInNewWindow) }.keyboardShortcut("o", modifiers: [.command, .shift])
+            Button("Open…") { environment.dispatch(.openFile) }.keyboardShortcut("o", modifiers: .command)
+            Button("Open in New Window…") { environment.dispatch(.openInNewWindow) }.keyboardShortcut("o", modifiers: [.command, .shift])
             Menu("Edit") {
                 Button("Edit Current File") { CommandCenter.post(.editCurrentFile) }.keyboardShortcut("e", modifiers: .command)
                 Button("Choose Editor…") { CLIInstaller.chooseEditor(preferences) }
@@ -89,10 +145,7 @@ struct Mdv6App: App {
             Button("Find…") { CommandCenter.post(.find) }.keyboardShortcut("f", modifiers: .command)
             Button("Search History…") { CommandCenter.post(.searchHistory) }.keyboardShortcut("f", modifiers: [.command, .shift])
         }
-        CommandMenu("Navigate") {
-            Button("Back") { CommandCenter.post(.back) }.keyboardShortcut(.leftArrow, modifiers: .command)
-            Button("Forward") { CommandCenter.post(.forward) }.keyboardShortcut(.rightArrow, modifiers: .command)
-        }
+        DocumentCommands(history: environment.model.history)
         CommandGroup(replacing: .sidebar) {
             Button(preferences.sidebarCollapsed ? "Show Sidebar" : "Hide Sidebar") { CommandCenter.post(.toggleSidebar) }.keyboardShortcut("s", modifiers: [.control, .command])
             Button(preferences.inspectorVisible ? "Hide Inspector" : "Show Inspector") { CommandCenter.post(.toggleInspector) }.keyboardShortcut("0", modifiers: [.option, .command])
@@ -104,22 +157,23 @@ struct Mdv6App: App {
             let allowed = ThemeCatalog.resolve(id: preferences.themeId, isDarkAppearance: NSApp?.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua).smartTypographyAllowed
             Toggle(allowed ? "Smart Typography" : "Smart Typography (off for this theme)", isOn: $preferences.smartTypography).disabled(!allowed)
             Toggle("Load Remote Images", isOn: $preferences.loadRemoteImages)
+            Toggle("Show Frontmatter", isOn: $preferences.showFrontmatter)                   // R-44, C-04
         }
         CommandMenu("Bookmarks") {
             Button("Bookmark Current Spot") { CommandCenter.post(.bookmarkCurrentSpot) }.keyboardShortcut("d", modifiers: .command)
             Divider()
             Button("Set Placeholder") { CommandCenter.post(.setPlaceholder) }.keyboardShortcut("0", modifiers: [.command, .shift])
-            Button("Jump to Placeholder") { CommandCenter.post(.jumpToPlaceholder) }.keyboardShortcut("0", modifiers: .command)
+            Button("Jump to Placeholder") { environment.dispatch(.jumpToPlaceholder) }.keyboardShortcut("0", modifiers: .command)
             Divider()
             ForEach(1...BookmarksManager.slotCount, id: \.self) { n in
                 let row = bookmarks.slot(n)
-                Button(row.map { "\(n). \($0.title)" } ?? "\(n). (empty)") { CommandCenter.post([.slot1, .slot2, .slot3, .slot4, .slot5][n - 1]) }
+                Button(row.map { "\(n). \($0.title)" } ?? "\(n). (empty)") { environment.dispatch([.slot1, .slot2, .slot3, .slot4, .slot5][n - 1]) }
                     .keyboardShortcut(KeyEquivalent(Character("\(n)")), modifiers: .command)
                     .disabled(row == nil)
             }
         }
         CommandGroup(replacing: .help) {
-            Button("mdv6 Help") { CommandCenter.post(.help) }.keyboardShortcut("?", modifiers: .command)
+            Button("mdv6 Help") { environment.dispatch(.help) }.keyboardShortcut("?", modifiers: .command)
         }
     }
 }
@@ -143,6 +197,52 @@ struct MainWindowContent: View {
                     env.pendingOpen = []
                     env.model.startup(arguments: arguments + late, session: session)
                 }
+            }
+    }
+}
+
+/// §5.1 File · Close File / Close Window / Close All (R-47) and Navigate · Back / Forward / Next File / Previous File
+/// (R-18, R-48), enabled from the key window's session; also captures `openWindow` for E-38's windows on demand.
+struct DocumentCommands: Commands {
+    @ObservedObject var history: HistoryManager
+    @FocusedObject private var session: DocumentSession?
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some Commands {
+        let _ = { AppEnvironment.shared.openWindow = openWindow }()
+        CommandGroup(replacing: .saveItem) {
+            Button("Close File") { CommandCenter.post(.closeFile) }.keyboardShortcut("w", modifiers: .command)
+                .disabled(!(session?.canCloseFile ?? false))
+            Button("Close Window") { CommandCenter.targetWindow()?.performClose(nil) }.keyboardShortcut("w", modifiers: [.command, .shift])
+                .disabled(session == nil)
+            Divider()
+            Button("Close All") { CommandCenter.post(.closeAll) }.keyboardShortcut("w", modifiers: [.command, .option])
+                .disabled(history.entries.isEmpty || session == nil)
+        }
+        CommandMenu("Navigate") {
+            Button("Back") { CommandCenter.post(.back) }.keyboardShortcut(.leftArrow, modifiers: .command)
+            Button("Forward") { CommandCenter.post(.forward) }.keyboardShortcut(.rightArrow, modifiers: .command)
+            Divider()
+            Button("Next File") { CommandCenter.post(.nextFile) }.keyboardShortcut("]", modifiers: [.command, .shift])
+                .disabled(!(session?.hasNextFile ?? false))
+            Button("Previous File") { CommandCenter.post(.previousFile) }.keyboardShortcut("[", modifiers: [.command, .shift])
+                .disabled(!(session?.hasPreviousFile ?? false))
+        }
+    }
+}
+
+/// E-38: a window created on demand runs the pending action once its session exists.
+struct BlankWindowContent: View {
+    @StateObject private var session = DocumentSession(model: AppEnvironment.shared.model)
+
+    var body: some View {
+        DocumentRootView(session: session)
+            .frame(minWidth: 640, minHeight: 400)
+            .onAppear {
+                let env = AppEnvironment.shared
+                guard !env.pendingWindowActions.isEmpty else { return }
+                let action = env.pendingWindowActions.removeFirst()
+                DispatchQueue.main.async { action(session) }
             }
     }
 }

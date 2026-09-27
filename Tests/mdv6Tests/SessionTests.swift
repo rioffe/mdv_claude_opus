@@ -748,4 +748,139 @@ final class SessionTests: XCTestCase {
         XCTAssertEqual(model.bookmarks.bookmarks.last?.blockIndex, toc)
         XCTAssertEqual(s.document!.blocks[toc], "## Second heading")
     }
+
+    // MARK: v0.14 — R-44 block 0, R-47 closing, R-48 stepping, R-01 targeting, E-38
+
+    /// R-44, R-27, R-28 (F-174): a hidden header is never the ⌘D / ⌘⇧0 anchor (the next block is); a block-0 bookmark is
+    /// titled `Frontmatter`; a document that is only a hidden header beeps and adds nothing. T-52.
+    func testHiddenHeaderAnchorAndTitle() {
+        fs.contents["/d/fm.md"] = "---\ntitle: x\n---\n\n# Body\n\npara"
+        fs.contents["/d/only.md"] = "---\ntitle: x\n---\n"
+        let s = session()
+        s.open(u("/d/fm.md"), route: .adding)
+        model.preferences.showFrontmatter = false
+        s.topVisibleBlock = 0
+        s.bookmarkCurrentSpot()
+        XCTAssertEqual(model.bookmarks.bookmarks.last?.blockIndex, 1)
+        XCTAssertEqual(model.bookmarks.bookmarks.last?.title, "Body")
+        s.setPlaceholder()
+        XCTAssertEqual(model.placeholder.placeholder?.blockIndex, 1)
+        model.preferences.showFrontmatter = true
+        s.bookmarkCurrentSpot()
+        XCTAssertEqual(model.bookmarks.bookmarks.last?.blockIndex, 0)
+        XCTAssertEqual(model.bookmarks.bookmarks.last?.title, "Frontmatter")
+        model.preferences.showFrontmatter = false
+        s.open(u("/d/only.md"), route: .adding)
+        let count = model.bookmarks.bookmarks.count, before = beeps
+        s.bookmarkCurrentSpot(); s.setPlaceholder()
+        XCTAssertEqual(model.bookmarks.bookmarks.count, count)
+        XCTAssertEqual(beeps, before + 2)
+    }
+
+    /// R-47, R-06, R-26, R-18, §3.1: ⌘W removes the displayed row, its index row and its scroll position (nothing is
+    /// written back), pushes no snapshot, loads the new first row, and enters `EMPTY` after the last. T-55.
+    func testCloseFile() {
+        let s = session()
+        for p in ["/d/a.md", "/d/b.md", "/d/c.md"] { s.open(u(p), route: .adding) }
+        s.topVisibleBlock = 2
+        s.persistScrollPosition()
+        XCTAssertNotNil(model.database.scrollPosition(path: "/d/c.md"))
+        s.closeFile()
+        XCTAssertEqual(model.history.entries.map(\.path), ["/d/b.md", "/d/a.md"])
+        XCTAssertEqual(s.currentEntry?.path, "/d/b.md")
+        XCTAssertNil(model.database.scrollPosition(path: "/d/c.md"), "R-06: nothing persisted for a closed file")
+        XCTAssertTrue(model.database.search("C").allSatisfy { $0.path != "/d/c.md" })
+        s.goBack()
+        XCTAssertNotEqual(s.currentEntry?.path, "/d/c.md", "no snapshot of a closed file")
+        s.closeFile(); s.closeFile()
+        XCTAssertEqual(s.state, .empty)
+        XCTAssertFalse(s.canCloseFile)
+        s.closeFile()                                                              // disabled in EMPTY: no-op
+        XCTAssertEqual(s.state, .empty)
+    }
+
+    /// R-47, E-36, E-26: *Close All* acts in every window — history, index and scroll positions cleared, bookmarks kept,
+    /// every session's stacks emptied and every session `EMPTY`, a pending zero-byte re-read cancelled. T-55.
+    func testCloseAllEmptiesEveryWindow() {
+        let a = session(), b = session()
+        let wa = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+        let wb = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+        model.register(session: a, window: wa); model.register(session: b, window: wb)
+        a.open(u("/d/a.md"), route: .adding); a.open(u("/d/b.md"), route: .adding)
+        b.open(u("/d/c.md"), route: .adding)
+        a.bookmarkCurrentSpot()
+        fs.contents["/d/c.md"] = ""                                                 // a truncate in progress in window b
+        b.reloadFromDisk()
+        model.closeAll()
+        XCTAssertEqual(model.history.entries, [])
+        XCTAssertEqual(model.database.search("para"), [])
+        XCTAssertEqual(model.bookmarks.bookmarks.count, 1, "bookmarks survive Close All")
+        for s in [a, b] { XCTAssertEqual(s.state, .empty); XCTAssertFalse(s.canGoBack); XCTAssertFalse(s.canGoForward) }
+        fs.contents["/d/c.md"] = "# C again"
+        clock.advance(1)                                                            // the cancelled re-read must not fire
+        XCTAssertEqual(b.state, .empty)
+        XCTAssertEqual(model.history.entries, [])
+    }
+
+    /// R-48: Next / Previous File step the history list as a selecting route (order unchanged, no re-index), push a
+    /// snapshot like a row click, and stop at the ends. T-56.
+    func testStepFile() {
+        let s = session()
+        for p in ["/d/c.md", "/d/b.md", "/d/a.md"] { s.open(u(p), route: .adding) }   // history: a, b, c
+        s.selectHistoryRow(model.history.entries[1])                                   // b
+        let order = model.history.entries.map(\.path)
+        XCTAssertTrue(s.hasNextFile); XCTAssertTrue(s.hasPreviousFile)
+        s.stepFile(by: 1)
+        XCTAssertEqual(s.currentEntry?.path, "/d/c.md")
+        XCTAssertFalse(s.hasNextFile)
+        s.stepFile(by: 1)
+        XCTAssertEqual(s.currentEntry?.path, "/d/c.md", "no wrap")
+        s.stepFile(by: -1); s.stepFile(by: -1)
+        XCTAssertEqual(s.currentEntry?.path, "/d/a.md")
+        XCTAssertFalse(s.hasPreviousFile)
+        XCTAssertEqual(model.history.entries.map(\.path), order, "selecting route: order unchanged")
+        s.goBack()
+        XCTAssertEqual(s.currentEntry?.path, "/d/b.md", "a step pushes a snapshot")
+    }
+
+    /// R-01: the target is the key window when it is a document window, else the frontmost visible document window,
+    /// else any; the application does not terminate when its last window closes (R-47, E-38). T-61.
+    func testTargetSessionAndZeroWindows() {
+        let a = session(), b = session()
+        let wa = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+        let wb = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+        let helper = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+        model.register(session: a, window: wa); model.register(session: b, window: wb)
+        model.keyWindowProvider = { helper }                                         // a non-document key window
+        model.orderedWindowsProvider = { [helper, wb, wa] }
+        model.visibility = { _ in true }
+        XCTAssertTrue(model.targetSession === b)
+        model.keyWindowProvider = { wa }
+        XCTAssertTrue(model.targetSession === a)
+        model.keyWindowProvider = { nil }; model.orderedWindowsProvider = { [] }
+        XCTAssertNotNil(model.targetSession)
+        XCTAssertFalse(mdv6AppDelegate().applicationShouldTerminateAfterLastWindowClosed(NSApplication.shared))
+        XCTAssertTrue(model.hasDocumentWindow)
+        model.unregister(window: wa); model.unregister(window: wb)
+        XCTAssertFalse(model.hasDocumentWindow)
+    }
+
+    /// E-38 (F-178): with no document window, a window is created only when the action has a file to load.
+    func testWindowOnDemandOnlyWithAFile() {
+        let s = session()
+        s.open(u("/d/a.md"), route: .adding)
+        s.bookmarkCurrentSpot()
+        let row = model.bookmarks.bookmarks[0]
+        XCTAssertTrue(model.needsWindow(for: .openURLs([u("/d/a.md")])))
+        XCTAssertFalse(model.needsWindow(for: .openURLs([])))                         // cancelled ⌘O panel
+        XCTAssertFalse(model.needsWindow(for: .placeholder))                           // no placeholder: beep, no window
+        s.setPlaceholder()
+        XCTAssertTrue(model.needsWindow(for: .placeholder))
+        XCTAssertTrue(model.needsWindow(for: .bookmark(row)))
+        fs.contents.removeValue(forKey: "/d/a.md")
+        XCTAssertFalse(model.needsWindow(for: .bookmark(row)), "missing file: beep, no window")
+        XCTAssertFalse(model.needsWindow(for: .placeholder))
+        XCTAssertTrue(model.needsWindow(for: .help))
+        XCTAssertTrue(model.needsWindow(for: .dockReopen))
+    }
 }

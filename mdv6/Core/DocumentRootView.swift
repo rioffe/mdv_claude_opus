@@ -7,15 +7,20 @@ import AppKit
 /// §5.1 commands, posted with the key window in `userInfo` (E-26) and handled by that window only.
 public enum AppCommand: String, Sendable {
     case openFile, openInNewWindow, editCurrentFile, find, searchHistory, back, forward, toggleSidebar, toggleInspector,
-         zoomIn, zoomOut, actualSize, bookmarkCurrentSpot, setPlaceholder, jumpToPlaceholder, slot1, slot2, slot3, slot4, slot5, help
+         zoomIn, zoomOut, actualSize, bookmarkCurrentSpot, setPlaceholder, jumpToPlaceholder, slot1, slot2, slot3, slot4, slot5, help,
+         closeFile, closeAll, nextFile, previousFile
 }
 
 public enum CommandCenter {
     public static let name = Notification.Name("mdv6.command")
+    /// R-01: the window a command addresses when none is given — the app sets this to `AppModel.targetWindow` (the key
+    /// window when it is a document window, else the frontmost visible one).
+    @MainActor public static var targetWindow: () -> NSWindow? = { NSApp.keyWindow }
+
     /// E-26: the target window is captured when the command is posted.
     @MainActor
     public static func post(_ command: AppCommand, window: NSWindow? = nil) {
-        let target = window ?? NSApp.keyWindow
+        let target = window ?? targetWindow()
         NotificationCenter.default.post(name: name, object: nil, userInfo: ["command": command.rawValue, "window": target as Any])
     }
 }
@@ -42,6 +47,14 @@ public struct DocumentRootView: View {
     @State private var hudTimer: DispatchWorkItem? = nil
     @State private var editorAlert: String? = nil
     @State private var dropTargeted = false
+    @State private var scrollKeys = ScrollKeyMonitor()                     // R-49
+    @State private var fileSteps = FileStepMonitor()                       // R-48 ⌃⇥ / ⌃⇧⇥
+
+    private func installKeyMonitors(_ w: NSWindow?) {
+        guard let w else { return }
+        scrollKeys.install()
+        fileSteps.install(window: { [weak w] in w }) { d in session.stepFile(by: d) }
+    }
 
     public init(session: DocumentSession) {
         self.session = session
@@ -79,6 +92,9 @@ public struct DocumentRootView: View {
         .toolbarBackground(.visible, for: .windowToolbar)
         .toolbar { toolbar }
         .onReceive(NotificationCenter.default.publisher(for: CommandCenter.name)) { handle($0) }
+        .focusedSceneObject(session)                                                  // R-47/R-48 menu enablement
+        .onChange(of: window) { w in installKeyMonitors(w) }
+        .onDisappear { scrollKeys.uninstall(); fileSteps.uninstall() }
         .onReceive(NotificationCenter.default.publisher(for: .mdv6RevealRemoteImageSetting)) { _ in preferences.loadRemoteImages = true }
         .onReceive(NotificationCenter.default.publisher(for: .mdv6OpenInNewWindow)) { note in
             guard let path = note.userInfo?["path"] as? String, let target = note.userInfo?["window"] as? NSWindow, target === window else { return }
@@ -141,7 +157,7 @@ public struct DocumentRootView: View {
             if session.state == .empty {
                 emptyPanel
             } else {
-                ArticleScroller(session: session, areaWidth: areaWidth)
+                ArticleScroller(session: session, areaWidth: areaWidth, onScrollView: { scrollKeys.scrollView = $0 })
             }
             if session.state != .empty && session.findState == nil {
                 Button { session.openFind() } label: {
@@ -268,6 +284,23 @@ public struct DocumentRootView: View {
         case .slot4: session.openSlot(4)
         case .slot5: session.openSlot(5)
         case .help: HelpManager.openHelp(in: session)
+        case .closeFile: session.closeFile()                                          // R-47
+        case .closeAll: confirmCloseAll()                                             // R-47, E-36
+        case .nextFile: session.stepFile(by: 1)                                       // R-48
+        case .previousFile: session.stepFile(by: -1)
+        }
+    }
+
+    /// R-47: *Close All* asks first; on *Close All* every row goes and every window enters `EMPTY` (E-36).
+    private func confirmCloseAll() {
+        guard let window, !history.entries.isEmpty else { return }
+        let alert = NSAlert()
+        alert.messageText = "Close all files?"
+        alert.informativeText = "This clears the sidebar history and the search index."
+        alert.addButton(withTitle: "Close All").hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+        alert.beginSheetModal(for: window) { response in
+            if response == .alertFirstButtonReturn { session.model.closeAll() }
         }
     }
 
@@ -316,6 +349,8 @@ public struct DocumentRootView: View {
 struct ArticleScroller: View {
     @ObservedObject var session: DocumentSession
     let areaWidth: CGFloat
+    /// R-49: hands the article's own `NSScrollView` to the keyboard-scroll monitor.
+    var onScrollView: (NSScrollView?) -> Void = { _ in }
 
     struct BlockFrame: Equatable { let index: Int; let minY: CGFloat }
     struct BlockFramesKey: PreferenceKey {
@@ -328,6 +363,7 @@ struct ArticleScroller: View {
             ScrollView(.vertical) {
                 ArticleView(host: session, areaWidth: areaWidth, lazy: true)
                     .background(GeometryReader { _ in Color.clear })
+                    .background(EnclosingScrollViewAccessor(onScrollView: onScrollView))
                     .overlay(alignment: .top) { visibilityProbe }
                     .padding(.vertical, 24)
                     .frame(maxWidth: .infinity)
@@ -371,5 +407,18 @@ struct FindBar: View {
         .background(theme.secondaryBackground)
         .overlay(Rectangle().fill(theme.border).frame(height: 1), alignment: .bottom)
         .onAppear { focused = true }
+    }
+}
+
+/// R-49: finds the `NSScrollView` enclosing the article (the window holds several — the sidebar list, wide code blocks).
+struct EnclosingScrollViewAccessor: NSViewRepresentable {
+    let onScrollView: (NSScrollView?) -> Void
+    func makeNSView(context: Context) -> NSView {
+        let v = NSView()
+        DispatchQueue.main.async { onScrollView(v.enclosingScrollView) }
+        return v
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async { onScrollView(nsView.enclosingScrollView) }
     }
 }

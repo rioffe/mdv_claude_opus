@@ -107,6 +107,16 @@ public struct WindowAccessor: NSViewRepresentable {
                     case "linkClicked": if let raw = note.userInfo?["path"] as? String, let url = URL(string: raw) { session.linkClicked(url) }
                     case "collapseSidebar": session.model.preferences.sidebarCollapsed = true
                     case "expandSidebar": session.model.preferences.sidebarCollapsed = false
+                    case "closeAllConfirmed": session.model.closeAll()                      // R-47 without the sheet
+                    case "key":                                                             // R-48/R-49 through the real monitors
+                        var mods: NSEvent.ModifierFlags = []
+                        let m = (note.userInfo?["mods"] as? String) ?? ""
+                        if m.contains("ctrl") { mods.insert(.control) }
+                        if m.contains("shift") { mods.insert(.shift) }
+                        if m.contains("cmd") { mods.insert(.command) }
+                        if let e = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: mods, timestamp: ProcessInfo.processInfo.systemUptime,
+                                                    windowNumber: window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "",
+                                                    isARepeat: false, keyCode: UInt16(index)) { NSApp.postEvent(e, atStart: false) }
                     default: break
                     }
                 }

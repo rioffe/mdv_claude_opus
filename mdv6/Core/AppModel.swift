@@ -68,14 +68,55 @@ public final class AppModel {
         return sessions.first { $0.window === window }?.session
     }
 
-    /// E-26: the key window's session; with no key window yet (cold start), the first registered session.
-    @MainActor
-    public var keySession: DocumentSession? { session(for: keyWindowProvider()) ?? mainSession ?? sessions.first?.session }
+    /// Test hooks: the application's windows front to back, and whether a window is visible.
+    public var orderedWindowsProvider: () -> [NSWindow] = { NSApp?.orderedWindows ?? [] }
+    public var visibility: (NSWindow) -> Bool = { $0.isVisible }
 
-    /// R-01 / E-26: an open event (Finder, `open -a`, `bin/mdv6 FILE`) goes to the key window only.
+    /// R-01: the key window when it is a document window, else the frontmost visible document window, else any.
+    @MainActor
+    public var targetWindow: NSWindow? {
+        if let key = keyWindowProvider(), session(for: key) != nil { return key }
+        if let front = orderedWindowsProvider().first(where: { w in visibility(w) && sessions.contains { $0.window === w } }) { return front }
+        return sessions.first?.window
+    }
+
+    /// R-01 / E-26: the session of the target window; with no window registered yet (cold start), the main session.
+    @MainActor
+    public var targetSession: DocumentSession? { session(for: targetWindow) ?? mainSession ?? sessions.first?.session }
+
+    /// E-26 (unchanged name): the session commands and open events address.
+    @MainActor
+    public var keySession: DocumentSession? { targetSession }
+
+    /// E-38: whether any document window is open.
+    @MainActor
+    public var hasDocumentWindow: Bool { !sessions.isEmpty }
+
+    /// R-01 / E-26: an open event (Finder, `open -a`, `bin/mdv6 FILE`) goes to the target window only.
     @MainActor
     public func handleOpenEvent(urls: [URL]) {
-        keySession?.open(urls: urls)
+        targetSession?.open(urls: urls)
+    }
+
+    /// R-47 / E-36: *Close All* — every row (index rows and scroll positions with them; bookmarks kept) and every window's
+    /// stacks go, and every window enters `EMPTY`; E-26's one exception, since history is shared.
+    @MainActor
+    public func closeAll() {
+        history.clear()
+        for s in sessions.map(\.session) + [mainSession].compactMap({ $0 }) { s.resetForCloseAll() }
+    }
+
+    /// E-38: what a window would be created for when none exists.
+    public enum DemandAction { case openURLs([URL]), bookmark(Database.BookmarkRow), placeholder, help, dockReopen }
+
+    /// E-38 (F-178): create a window only once the action has a file to load.
+    public func needsWindow(for action: DemandAction) -> Bool {
+        switch action {
+        case .openURLs(let urls): return !urls.isEmpty
+        case .bookmark(let row): return fileSystem.exists(row.path)
+        case .placeholder: return placeholder.placeholder.map { fileSystem.exists($0.path) } ?? false
+        case .help, .dockReopen: return true
+        }
     }
 
     /// R-40: the main window's launch — a cold-start argument pre-empts restoring the history head.

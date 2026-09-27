@@ -412,4 +412,18 @@ final class PersistenceTests: XCTestCase {
         XCTAssertNil(empty.defaultsSuite)
         XCTAssertEqual(AppModel.defaultSupportDirectory.path, NSHomeDirectory() + "/Library/Application Support/mdv6")
     }
+
+    /// C-04, R-44, R-32, T-42: `mdv6_show_frontmatter` defaults to true, falls back to true on a wrong type, persists.
+    func testShowFrontmatterKey() {
+        let suite = "mdv6.fm.\(UUID().uuidString)"
+        let d = UserDefaults(suiteName: suite)!
+        defer { UserDefaults.standard.removePersistentDomain(forName: suite) }
+        XCTAssertEqual(Preferences.Key.showFrontmatter, "mdv6_show_frontmatter")
+        XCTAssertTrue(Preferences(defaults: d).showFrontmatter)
+        d.set("nope", forKey: Preferences.Key.showFrontmatter)
+        XCTAssertTrue(Preferences(defaults: d).showFrontmatter)
+        let p = Preferences(defaults: d)
+        p.showFrontmatter = false
+        XCTAssertFalse(Preferences(defaults: d).showFrontmatter)
+    }
 }

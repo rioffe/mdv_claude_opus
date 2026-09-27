@@ -137,12 +137,13 @@ public final class DocumentSession: ObservableObject, ArticleHost {
     /// Loads one file. Returns `false` (E-03: nothing changed) when unreadable. `pushSnapshot` is false for bookmark,
     /// placeholder, cold-start and delete-current loads (R-18); `suppressRestore` for cross-file fragments (R-19).
     @discardableResult
-    public func open(_ url: URL, route: OpenRoute, suppressRestore: Bool = false, pushSnapshot: Bool = true) -> Bool {
+    public func open(_ url: URL, route: OpenRoute, suppressRestore: Bool = false, pushSnapshot: Bool = true,
+                     persistOutgoing: Bool = true) -> Bool {
         let path = url.standardizedFileURL.path
         if fileSystem.isDirectory(path) { return loadDirectory(url) }
         guard let text = readDocument(path) else { return false }          // E-03: previous state kept
         state = .loading
-        if document != nil { persistScrollPosition() }
+        if document != nil && persistOutgoing { persistScrollPosition() }  // R-06: never for a row being removed
         if pushSnapshot, let entry = currentEntry, entry.path != path {
             backStack.append(NavSnapshot(entry: entry, topBlock: topVisibleBlock))
             forwardStack.removeAll()
@@ -209,8 +210,38 @@ public final class DocumentSession: ObservableObject, ArticleHost {
         backStack.removeAll { $0.entry.id == entry.id }
         forwardStack.removeAll { $0.entry.id == entry.id }
         guard wasDisplayed else { return }
-        if let newHead, open(URL(fileURLWithPath: newHead.path), route: .selecting, pushSnapshot: false) { return }
+        if let newHead, open(URL(fileURLWithPath: newHead.path), route: .selecting, pushSnapshot: false, persistOutgoing: false) { return }
         enterEmpty()
+    }
+
+    // MARK: R-47 closing, R-48 stepping
+
+    /// R-47: *Close File* is enabled while a file is displayed.
+    public var canCloseFile: Bool { currentEntry != nil && state != .empty }
+
+    /// R-47 ⌘W: exactly the displayed row's swipe-delete (R-20, R-26) — no scroll position written back (R-06), no snapshot.
+    public func closeFile() {
+        guard canCloseFile, let entry = currentEntry else { return }
+        deleteHistoryRow(entry)
+    }
+
+    /// R-47 / E-36 in this window: nothing in flight survives (the pending zero-byte re-read is cancelled; loads are
+    /// synchronous), both stacks empty, `EMPTY`. The model has already cleared history.
+    public func resetForCloseAll() {
+        emptyRetryTimer?.cancel(); emptyRetryTimer = nil
+        backStack.removeAll(); forwardStack.removeAll()
+        enterEmpty()
+    }
+
+    private var historyIndex: Int? { currentPath.flatMap { p in model.history.entries.firstIndex { $0.path == p } } }
+    public var hasNextFile: Bool { HistoryStep.target(current: historyIndex, offset: 1, count: model.history.entries.count) != nil }
+    public var hasPreviousFile: Bool { HistoryStep.target(current: historyIndex, offset: -1, count: model.history.entries.count) != nil }
+
+    /// R-48: the row below (+1) or above (−1) as a selecting route (order and index untouched), pushing a snapshot like a
+    /// row click; nothing at the ends.
+    public func stepFile(by offset: Int) {
+        guard let t = HistoryStep.target(current: historyIndex, offset: offset, count: model.history.entries.count) else { return }
+        open(URL(fileURLWithPath: model.history.entries[t].path), route: .selecting)
     }
 
     private func enterEmpty() {
@@ -481,14 +512,24 @@ public final class DocumentSession: ObservableObject, ArticleHost {
 
     // MARK: R-27 bookmarks
 
-    /// R-27: the hovered block, else the topmost block in the viewport.
-    private var anchorBlock: Int? {
+    /// R-27: the hovered block, else the topmost block in the viewport — never a hidden frontmatter header, whose next
+    /// block is taken instead; nil when the hidden header is the only block (R-44, F-174).
+    public var anchorBlock: Int? {
         guard let doc = document, !doc.blocks.isEmpty else { return nil }
-        return min(max(hoveredBlockIndex ?? topVisibleBlock, 0), doc.blocks.count - 1)
+        var i = min(max(hoveredBlockIndex ?? topVisibleBlock, 0), doc.blocks.count - 1)
+        if i == 0, doc.frontmatter != nil, !showFrontmatter {
+            guard doc.blocks.count > 1 else { return nil }
+            i = 1
+        }
+        return i
     }
+
+    /// R-44: a document that is only a hidden header has no anchor.
+    private var hasNoAnchor: Bool { document.map { !$0.blocks.isEmpty } == true && anchorBlock == nil }
 
     public func bookmarkCurrentSpot() {
         guard let path = currentPath, let doc = document else { return }
+        if hasNoAnchor { beeper(); return }
         guard let row = model.bookmarks.add(path: path, document: doc, index: anchorBlock ?? 0) else { return }
         // F-008: the new row is shown and marked current (the R-28 placeholder rule, applied to ⌘D): a bookmark added into
         // a hidden inspector or a collapsed pane was invisible, so ⌘D looked like it did nothing.
@@ -522,8 +563,9 @@ public final class DocumentSession: ObservableObject, ArticleHost {
 
     public func setPlaceholder() {
         guard let path = currentPath, let doc = document else { return }
+        if hasNoAnchor { beeper(); return }
         let index = anchorBlock ?? 0
-        let title = BookmarkTitle.title(blocks: doc.blocks, toc: doc.tocHeadings, index: index)
+        let title = BookmarkTitle.title(blocks: doc.blocks, toc: doc.tocHeadings, index: index, hasFrontmatter: doc.frontmatter != nil)
         let fingerprint = doc.blocks.isEmpty ? "" : bookmarkFingerprint(doc.blocks[index])
         model.placeholder.set(Placeholder(path: path, blockIndex: index, fingerprint: fingerprint, title: title))
         model.preferences.bookmarksExpanded = true
