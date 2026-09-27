@@ -10,7 +10,7 @@ public struct FindBlockStyle: Equatable, Sendable {
     public let colorRole: ColorRole
     public let weight: WeightRole
     public let lineSpacing: CGFloat       // 0.125 em for headings, paragraphLineSpacingEm for body
-    public let bottomPadding: CGFloat     // 0.3 × size under h1/h2
+    public let bottomPadding: CGFloat     // 0.3 × body size, only above a drawn h1/h2 rule (the article heading's own)
     public let rule: Bool                 // the h1/h2 divider when the theme shows it
     public let codeSize: CGFloat          // inline code: round(0.90 × size)
 
@@ -27,14 +27,15 @@ public struct FindBlockStyle: Equatable, Sendable {
         let e: CGFloat = l.map { theme.headingSizeEms[$0 - 1] } ?? 1
         let size = (theme.baseFontSize * zoom * e).rounded()
         let isHeading = l != nil
+        let rule = l == 1 ? theme.showH1Rule : (l == 2 ? theme.showH2Rule : false)
         return FindBlockStyle(
             level: l,
             size: size,
             colorRole: l == 6 ? .tertiaryText : (isHeading ? .heading : .text),
             weight: isHeading ? .heading : .regular,
             lineSpacing: size * (isHeading ? 0.125 : theme.paragraphLineSpacingEm),
-            bottomPadding: (l == 1 || l == 2) ? size * 0.3 : 0,
-            rule: l == 1 ? theme.showH1Rule : (l == 2 ? theme.showH2Rule : false),
+            bottomPadding: rule ? theme.baseFontSize * zoom * 0.3 : 0,
+            rule: rule,
             codeSize: (size * 0.90).rounded())
     }
 }

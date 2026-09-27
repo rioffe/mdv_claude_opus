@@ -78,6 +78,9 @@ public struct ArticleImageProvider: ImageProvider {
     public func makeImage(url: URL?) -> some View {
         if let url, url.scheme == MathMarkdown.scheme, let spec = MathMarkdown.decode(url: url) {
             MathDisplayView(spec: spec, scale: scale, centred: spec.display && MathMarkdown.isOwnParagraph(url: url), theme: theme)
+        } else if let url, let spec = HTMLImageSpec(url: url) {
+            HTMLImageBlockView(spec: spec, theme: theme, baseURL: baseURL, loadRemote: loadRemote, remoteLoader: remoteLoader,
+                               onRevealRemoteSetting: onRevealRemoteSetting)                                   // C-22.2
         } else if let url {
             DocumentImageView(url: url, theme: theme, baseURL: baseURL, loadRemote: loadRemote, remoteLoader: remoteLoader, onRevealRemoteSetting: onRevealRemoteSetting)
         } else {

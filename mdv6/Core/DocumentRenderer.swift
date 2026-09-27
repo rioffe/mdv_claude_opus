@@ -12,7 +12,9 @@ public final class StaticArticleHost: ArticleHost {
     public let smartTypography: Bool
     public let loadRemoteImages: Bool = false
     public let mermaidStyle: MermaidStyle
-    public let findState: FindState? = nil
+    public let findState: FindState?
+    public let showFrontmatter: Bool
+    public let resolvesInlineImagesUpFront = true
     public let flashedRange: Range<Int>? = nil
     public let hoveredBlockIndex: Int? = nil
     public let baseURL: URL?
@@ -20,9 +22,16 @@ public final class StaticArticleHost: ArticleHost {
     public let backingScale: CGFloat
     public let remoteLoader: RemoteImageLoader? = nil
 
-    public init(document: ParsedDocument?, theme: MDVTheme, zoom: CGFloat, smartTypography: Bool, mermaidStyle: MermaidStyle, baseURL: URL?, backingScale: CGFloat) {
+    public init(document: ParsedDocument?, theme: MDVTheme, zoom: CGFloat, smartTypography: Bool, mermaidStyle: MermaidStyle, baseURL: URL?,
+                backingScale: CGFloat, showFrontmatter: Bool = true, findQuery: String? = nil) {
         self.document = document; self.theme = theme; self.zoom = zoom; self.smartTypography = smartTypography
         self.mermaidStyle = mermaidStyle; self.baseURL = baseURL; self.backingScale = backingScale
+        self.showFrontmatter = showFrontmatter
+        if let q = findQuery, let doc = document {                     // R-24: a find state for the render (tests, T-60)
+            self.findState = FindState(query: q, matches: FindHighlight.matches(query: q, blocks: doc.blocks), current: 0)
+        } else {
+            self.findState = nil
+        }
     }
 
     public func copySection(at index: Int) {}
@@ -48,6 +57,10 @@ public struct DocumentRenderer {
         public var zoom: CGFloat = 1
         public var mermaidStyle: MermaidStyle = .document
         public var baseURL: URL? = nil
+        /// R-44: `mdv6_show_frontmatter`.
+        public var showFrontmatter = true
+        /// R-24: render with the find bar open on this query.
+        public var findQuery: String? = nil
         public init() {}
     }
 
@@ -60,13 +73,14 @@ public struct DocumentRenderer {
         FontRegistration.registerBundledFonts()
         let doc = ParsedDocument(raw: markdown)
         let host = StaticArticleHost(document: doc, theme: options.theme, zoom: options.zoom, smartTypography: options.smartTypography,
-                                     mermaidStyle: options.mermaidStyle, baseURL: options.baseURL, backingScale: options.scale)
+                                     mermaidStyle: options.mermaidStyle, baseURL: options.baseURL, backingScale: options.scale,
+                                     showFrontmatter: options.showFrontmatter, findQuery: options.findQuery)
         let root: AnyView
         if options.singleView {
             let t = options.theme
             let size = t.baseFontSize * options.zoom
             let text = doc.blocks.map { block -> String in
-                var s = MathMarkdown.rewrite(block, fontSize: size, headingSizeEms: t.headingSizeEms, color: t.rgba.text)
+                var s = MathMarkdown.rewrite(RawHTMLImages.rewrite(block), fontSize: size, headingSizeEms: t.headingSizeEms, color: t.rgba.text)
                 if options.smartTypography && t.smartTypographyAllowed { s = smartenMarkdown(s) }
                 return s
             }.joined(separator: "\n\n")
@@ -75,7 +89,8 @@ public struct DocumentRenderer {
                 Markdown(text, baseURL: options.baseURL)
                     .markdownTheme(ArticleTheme.markdownTheme(for: t, zoom: options.zoom))
                     .markdownImageProvider(ArticleImageProvider(theme: t, scale: options.scale, baseURL: options.baseURL, loadRemote: false, remoteLoader: nil))
-                    .markdownInlineImageProvider(MathInlineImageProvider(scale: options.scale))
+                    .markdownInlineImageProvider(ArticleInlineImageProvider(theme: t, scale: options.scale, baseURL: options.baseURL, loadRemote: false, remoteLoader: nil))
+                    .markdownResolvedInlineImages(ArticleInlineImageProvider(theme: t, scale: options.scale, baseURL: options.baseURL, loadRemote: false, remoteLoader: nil).resolvedImages(markdown: text))
                     .markdownCodeSyntaxHighlighter(ArticleCodeHighlighter(theme: t, zoom: options.zoom))
                     .padding(.horizontal, ColumnWidth.blockPadding)
                     .frame(width: column + 2 * ColumnWidth.blockPadding, alignment: .leading)

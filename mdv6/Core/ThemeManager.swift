@@ -74,6 +74,14 @@ public struct CodePalette: Equatable, Sendable {
     ])
 }
 
+/// C-05.1: added / removed foreground and background colours for `diff` fences.
+public struct DiffColors: Equatable, Sendable {
+    public let add, addBackground, remove, removeBackground: RGBA
+    init(_ add: String, _ addBg: String, _ remove: String, _ removeBg: String) {
+        self.add = RGBA(hex: add)!; addBackground = RGBA(hex: addBg)!; self.remove = RGBA(hex: remove)!; removeBackground = RGBA(hex: removeBg)!
+    }
+}
+
 // MARK: - MDVTheme (C-09)
 
 public struct MDVTheme: Identifiable, Equatable, Sendable {
@@ -100,6 +108,22 @@ public struct MDVTheme: Identifiable, Equatable, Sendable {
     public var strongFontWeight: Font.Weight = .semibold
     public var smartTypographyAllowed = true                 // false for phosphor, standard-erin-light, standard-erin-dark
     public var codePalette: CodePalette
+
+    /// C-05.1: the diff colours of this theme's code palette (sRGB), by theme id; the githubLight / oneDark defaults for
+    /// a theme without its own palette.
+    public var diffColors: DiffColors {
+        switch id {
+        case "high-contrast": return DiffColors("1A7F37", "DAFBE1", "CF222E", "FFEBE9")
+        case "sevilla", "standard-erin-light": return DiffColors("4F7138", "E3E5C9", "8C2A1A", "F0DCD0")
+        case "charcoal": return DiffColors("7EE787", "0E2B1A", "FF7B72", "3D1416")
+        case "solarium-daylight": return DiffColors("859900", "EAE9CD", "DC322F", "F0D8D2")
+        case "solarium-moonlight": return DiffColors("859900", "0F2E1A", "DC322F", "3A1817")
+        case "phosphor": return DiffColors("CFCFCF", "1A1A1A", "888888", "141414")
+        case "twilight": return DiffColors("A6E3B0", "122319", "F8B3B0", "271419")
+        case "standard-erin-dark": return DiffColors("C9C19A", "222B1A", "847C6A", "2A211A")
+        default: return isDark ? DiffColors("98C379", "1E3A2B", "E06C75", "3E1C20") : DiffColors("1A7F37", "DAFBE1", "CF222E", "FFEBE9")
+        }
+    }
 
     /// C-09: `[h1…h6]`, used by the Markdown theme and by math in headings (R-13).
     public var headingSizeEms: [CGFloat] { [h1SizeEm, h2SizeEm, h3SizeEm, h4SizeEm, h5SizeEm, h6SizeEm] }

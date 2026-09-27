@@ -23,6 +23,11 @@ public protocol ArticleHost: ObservableObject {
     var renderGeneration: Int { get }
     var backingScale: CGFloat { get }
     var remoteLoader: RemoteImageLoader? { get }
+    /// R-44 / C-04 `mdv6_show_frontmatter`: whether block 0's header draws its table.
+    var showFrontmatter: Bool { get }
+    /// Inline images resolved up front for renderers that run no `.task` (the offscreen harness, print — I-016); the
+    /// window returns none and loads through the inline provider.
+    var resolvesInlineImagesUpFront: Bool { get }
     func copySection(at index: Int)
     func hoverChanged(_ index: Int?)
     func linkClicked(_ url: URL)
@@ -93,8 +98,16 @@ public struct ArticleBlockView<H: ArticleHost>: View {
     private var tint: FindTint { host.findState?.tint(for: index) ?? .none }
     private var flashed: Bool { host.flashedRange?.contains(index) ?? false }
     private var striped: Bool { host.hoveredBlockIndex == index && kind != .codeFence && kind != .mermaidFence }
+    /// C-02 rule 9: block 0 is a frontmatter header.
+    private var isHeader: Bool { index == 0 && host.document?.frontmatter != nil }
+    /// R-44: a hidden header draws nothing and takes no height, padding or spacing — unless find shows it (R-24).
+    private var hiddenHeader: Bool { isHeader && !host.showFrontmatter && tint == .none }
 
     public var body: some View {
+        if hiddenHeader { EmptyView() } else { styled }
+    }
+
+    private var styled: some View {
         content
             .padding(.horizontal, ColumnWidth.blockPadding)
             .padding(.top, Self.blockInset(theme: theme, previous: previous, current: block))
@@ -110,6 +123,14 @@ public struct ArticleBlockView<H: ArticleHost>: View {
     }
 
     @ViewBuilder private var content: some View {
+        if isHeader, tint == .none, let rows = host.document?.frontmatter {
+            FrontmatterTableView(rows: rows, theme: theme, zoom: host.zoom)            // C-20.3
+        } else {
+            nonHeaderContent
+        }
+    }
+
+    @ViewBuilder private var nonHeaderContent: some View {
         switch kind {
         case .codeFence:
             CodeBlockChrome(parts: FenceParts(block: block), theme: theme, zoom: host.zoom)
@@ -122,20 +143,32 @@ public struct ArticleBlockView<H: ArticleHost>: View {
     }
 
     @ViewBuilder private var prose: some View {
-        if let find = host.findState, tint != .none, FindHighlight.shouldInlineHighlight(block: block) {
-            // R-24: the matching block re-rendered as inline text with every occurrence marked (E-17)
-            Text(FindHighlight.highlightedAttributedString(block: block, query: find.query, theme: theme))
-                .font(ArticleTheme.font(for: theme.bodyFontFamily, size: theme.baseFontSize * host.zoom))
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        if let find = host.findState, tint != .none, FindHighlight.mode(block: block, isHeader: isHeader) != .tint {
+            // R-24: the matching block as inline text with every occurrence marked (E-17), in the block's own
+            // typography (C-09.1); a header verbatim, fence lines included (F-159, F-179)
+            let style = FindBlockStyle.style(forBlock: isHeader ? "" : block, theme: theme, zoom: host.zoom)
+            let text = isHeader
+                ? FindHighlight.verbatimAttributedString(block: block, query: find.query, theme: theme)
+                : FindHighlight.styled(FindHighlight.highlightedAttributedString(block: block, query: find.query, theme: theme), style: style, theme: theme)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(text)
+                    .font(ArticleTheme.font(for: theme.bodyFontFamily, size: style.size, weight: style.weight == .heading ? theme.headingFontWeight : .regular))
+                    .foregroundStyle(FindHighlight.color(style.colorRole, theme))
+                    .lineSpacing(style.lineSpacing)
+                    .padding(.bottom, style.bottomPadding)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if style.rule { Divider().overlay(theme.divider) }
+            }
         } else {
             let markdown = Markdown(rendered, baseURL: host.baseURL)
                 .markdownTheme(ArticleTheme.markdownTheme(for: theme, zoom: host.zoom))
                 .markdownImageProvider(ArticleImageProvider(theme: theme, scale: host.backingScale, baseURL: host.baseURL,
                                                             loadRemote: host.loadRemoteImages, remoteLoader: host.remoteLoader,
                                                             onRevealRemoteSetting: { host.revealRemoteImageSetting() }))
-                .markdownInlineImageProvider(MathInlineImageProvider(scale: host.backingScale))
+                .markdownInlineImageProvider(inlineProvider)
                 .markdownCodeSyntaxHighlighter(ArticleCodeHighlighter(theme: theme, zoom: host.zoom))
+                .markdownResolvedInlineImages(host.resolvesInlineImagesUpFront ? inlineProvider.resolvedImages(markdown: rendered) : [:])
                 .environment(\.openURL, OpenURLAction { url in host.linkClicked(url); return .handled })
             if isTOCHeading {
                 // R-22: not text-selectable, pointing hand, a click copies the section (modifier keys not distinguished)
@@ -150,10 +183,15 @@ public struct ArticleBlockView<H: ArticleHost>: View {
         }
     }
 
-    /// §3.2, R-17: math rewriting precedes smart typography.
+    private var inlineProvider: ArticleInlineImageProvider {
+        ArticleInlineImageProvider(theme: theme, scale: host.backingScale, baseURL: host.baseURL,
+                                   loadRemote: host.loadRemoteImages, remoteLoader: host.remoteLoader)
+    }
+
+    /// §3.2: `<img>` rewriting (C-22) precedes math rewriting, which precedes smart typography (R-17).
     private var rendered: String {
         let size = theme.baseFontSize * host.zoom
-        var text = MathMarkdown.rewrite(block, fontSize: size, headingSizeEms: theme.headingSizeEms, color: theme.rgba.text)
+        var text = MathMarkdown.rewrite(RawHTMLImages.rewrite(block), fontSize: size, headingSizeEms: theme.headingSizeEms, color: theme.rgba.text)
         if host.smartTypography && theme.smartTypographyAllowed { text = smartenMarkdown(text) }
         return text
     }
@@ -185,9 +223,17 @@ public struct ArticleBlocksView<H: ArticleHost>: View {
         }
     }
 
+    /// C-18.10's previous block, except that a hidden header counts as absent (R-44, I-018: the body starts where it would
+    /// without one).
+    private func previous(_ i: Int, _ blocks: [String]) -> String? {
+        guard i > 0 else { return nil }
+        if i == 1, host.document?.frontmatter != nil, !host.showFrontmatter { return nil }
+        return blocks[i - 1]
+    }
+
     @ViewBuilder private func rows(_ blocks: [String]) -> some View {
         ForEach(Array(blocks.enumerated()), id: \.offset) { i, block in
-            ArticleBlockView(index: i, block: block, host: host, columnWidth: columnWidth, previous: i > 0 ? blocks[i - 1] : nil)
+            ArticleBlockView(index: i, block: block, host: host, columnWidth: columnWidth, previous: previous(i, blocks))
                 .id(i)
                 .background(GeometryReader { g in                       // R-27 / R-06: which block is topmost in the viewport
                     Color.clear.preference(key: ArticleScroller.BlockFramesKey.self, value: [ArticleScroller.BlockFrame(index: i, minY: g.frame(in: .named("article")).minY)])

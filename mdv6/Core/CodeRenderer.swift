@@ -21,10 +21,13 @@ public final class CodeRenderer {
         public let pointSize: CGFloat
         public let isMonospace: Bool
         public let isItalic: Bool
+        public let isSemibold: Bool
         public init(_ font: NSFont) {
             pointSize = font.pointSize
             isMonospace = font.fontDescriptor.symbolicTraits.contains(.monoSpace)
             isItalic = font.fontDescriptor.symbolicTraits.contains(.italic)
+            let weight = (font.fontDescriptor.object(forKey: .traits) as? [NSFontDescriptor.TraitKey: Any])?[.weight] as? CGFloat ?? 0
+            isSemibold = weight >= NSFont.Weight.semibold.rawValue - 0.01
         }
     }
     public enum FontKey: AttributedStringKey { public typealias Value = FontSpec; public static let name = "mdv6.font" }
@@ -39,7 +42,7 @@ public final class CodeRenderer {
     private var cache: [CacheKey: AttributedString] = [:]
     private let lock = NSLock()
 
-    struct CacheKey: Hashable { let language: CodeLanguage?; let themeId: String; let zoom: CGFloat; let code: Int }
+    struct CacheKey: Hashable { let language: CodeLanguage?; let isDiff: Bool; let themeId: String; let zoom: CGFloat; let code: Int }
 
     public init() {}
 
@@ -115,7 +118,9 @@ public final class CodeRenderer {
     /// C-05: synchronous, never throws.
     public func render(code: String, languageHint: String?, theme: MDVTheme, zoom: CGFloat) -> AttributedString {
         let lang = CodeLanguage.resolve(infoString: languageHint)
-        let key = CacheKey(language: lang, themeId: theme.id, zoom: zoom, code: code.hashValue)
+        let fenceWord = languageHint?.lowercased().split(whereSeparator: { $0.isWhitespace }).first.map(String.init)
+        let isDiff = fenceWord.map(DiffHighlighter.fenceWords.contains) ?? false       // R-50, C-05: not tree-sitter
+        let key = CacheKey(language: lang, isDiff: isDiff, themeId: theme.id, zoom: zoom, code: code.hashValue)
         lock.lock()
         if let hit = cache[key] { lock.unlock(); return hit }
         lock.unlock()
@@ -130,7 +135,9 @@ public final class CodeRenderer {
         out[FontKey.self] = FontSpec(baseFont)
         out[CaptureColorKey.self] = palette.plain.hex
 
-        if let lang, let g = grammar(for: lang), let query = g.query, !plainForSession.contains(lang) {
+        if isDiff {
+            DiffHighlighter.apply(to: &out, code: code, theme: theme, baseFont: baseFont)
+        } else if let lang, let g = grammar(for: lang), let query = g.query, !plainForSession.contains(lang) {
             let parser = Parser()                                       // C-05: a fresh Parser per call
             if (try? parser.setLanguage(g.language)) != nil {
                 PipelineProbe.enter("treesitter")

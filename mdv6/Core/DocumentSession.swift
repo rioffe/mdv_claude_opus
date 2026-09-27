@@ -101,6 +101,8 @@ public final class DocumentSession: ObservableObject, ArticleHost {
     public var zoom: CGFloat { CGFloat(model.preferences.fontScale) }
     public var smartTypography: Bool { model.preferences.smartTypography }
     public var loadRemoteImages: Bool { model.preferences.loadRemoteImages }
+    public var showFrontmatter: Bool { model.preferences.showFrontmatter }
+    public let resolvesInlineImagesUpFront = false
     public var mermaidStyle: MermaidStyle { MermaidStyle(storedValue: model.preferences.mermaidStyle) }
     public var baseURL: URL? { currentEntry.map { URL(fileURLWithPath: $0.path).deletingLastPathComponent() } }
     public func hoverChanged(_ index: Int?) { hoveredBlockIndex = index }

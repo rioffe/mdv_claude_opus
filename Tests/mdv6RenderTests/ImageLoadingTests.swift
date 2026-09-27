@@ -212,4 +212,25 @@ final class ImageLoadingTests: XCTestCase {
         guard case .failed = load(loader, URL(string: "http:" + RecordingServer.slashes + "127.0.0.1:\(server.port)/slow")!) else { return XCTFail("timeout") }
         XCTAssertLessThan(Date().timeIntervalSince(start), 10)
     }
+
+    /// R-16, C-22.2, D-51: with Load Remote Images off, an inline remote image — Markdown or `<img>` — sends no request and
+    /// draws the non-clickable *Remote image blocked* text image; a missing inline local image draws nothing. T-59.
+    @MainActor
+    func testInlineRemoteGated() async throws {
+        let server = try RecordingServer(image: png(width: 6, height: 6))
+        defer { server.stop() }
+        let url = URL(string: "http:" + RecordingServer.slashes + "127.0.0.1:\(server.port)/img.png")!   // the path the server serves
+        let off = ArticleInlineImageProvider(theme: .highContrast, scale: 2, baseURL: dir, loadRemote: false, remoteLoader: RemoteImageLoader())
+        let tag = URL(string: HTMLImageSpec(src: url.absoluteString, alt: "r", width: 40, height: nil).url)!
+        for u in [url, tag] {
+            let result = try await off.resolve(url: u)
+            XCTAssertEqual(result, .text("Remote image blocked"), u.absoluteString)
+        }
+        XCTAssertEqual(server.requests.count, 0)
+        let missing = try await off.resolve(url: URL(string: HTMLImageSpec(src: "nope.png", alt: "", width: nil, height: nil).url)!)
+        XCTAssertEqual(missing, .empty)
+        let on = ArticleInlineImageProvider(theme: .highContrast, scale: 2, baseURL: dir, loadRemote: true, remoteLoader: RemoteImageLoader())
+        guard case .image = try await on.resolve(url: tag) else { return XCTFail("remote inline image did not load with the preference on") }
+        XCTAssertEqual(server.requests.count, 1)
+    }
 }

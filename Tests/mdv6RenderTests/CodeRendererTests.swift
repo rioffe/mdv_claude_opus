@@ -257,4 +257,53 @@ final class CodeRendererTests: XCTestCase {
         XCTAssertLessThanOrEqual(r.cacheCount, CodeRenderer.cacheLimit)
         XCTAssertEqual(CodeRenderer.cacheLimit, 256)
     }
+
+    // MARK: C-05.1 diff tint (R-50)
+
+    /// The attributes of the first run covering `needle` in `s`.
+    private func runAttributes(_ s: AttributedString, _ needle: String) -> (fg: String?, bg: String?, font: CodeRenderer.FontSpec?) {
+        let plain = String(s.characters)
+        guard let r = plain.range(of: needle), let lo = AttributedString.Index(r.lowerBound, within: s) else { return (nil, nil, nil) }
+        let run = s.runs[lo]
+        return (run[CodeRenderer.CaptureColorKey.self], run[DiffBackgroundKey.self], run[CodeRenderer.FontKey.self])
+    }
+
+    /// R-50, C-05.1, R-08: a `diff` fence is coloured line by line with the theme's diff colours, not tree-sitter; the
+    /// removed `--- stale comment` line is tinted, hunk headers italic, metadata semibold; `patch` is the same. T-58.
+    func testDiffTint() {
+        let code = "diff --git a/s b/s\n--- a/s\n+++ b/s\n@@ -1,2 +1,2 @@\n ctx\n--- stale comment\n+    -- body\n\\ No newline at end of file"
+        let out = CodeRenderer.shared.render(code: code, languageHint: "diff", theme: .highContrast, zoom: 1)
+        let removed = runAttributes(out, "--- stale comment")
+        XCTAssertEqual(removed.fg, "CF222EFF"); XCTAssertEqual(removed.bg, "FFEBE9FF")
+        let added = runAttributes(out, "+    -- body")
+        XCTAssertEqual(added.fg, "1A7F37FF"); XCTAssertEqual(added.bg, "DAFBE1FF")
+        XCTAssertEqual(runAttributes(out, "@@ -1,2").font?.isItalic, true)
+        XCTAssertEqual(runAttributes(out, "@@ -1,2").fg, MDVTheme.highContrast.rgba.secondaryText.hex)
+        XCTAssertEqual(runAttributes(out, "diff --git").font?.isSemibold, true)
+        XCTAssertEqual(runAttributes(out, "No newline").font?.isItalic, true)
+        XCTAssertEqual(runAttributes(out, " ctx").bg, nil)
+        let patch = CodeRenderer.shared.render(code: code, languageHint: "patch", theme: .highContrast, zoom: 1)
+        XCTAssertEqual(runAttributes(patch, "--- stale comment").bg, "FFEBE9FF")
+        // Per-theme colours (C-05.1 table): Phosphor separates by brightness, not hue.
+        let phosphor = CodeRenderer.shared.render(code: code, languageHint: "diff", theme: .phosphor, zoom: 1)
+        XCTAssertEqual(runAttributes(phosphor, "--- stale comment").fg, "888888FF")
+        XCTAssertEqual(runAttributes(phosphor, "+    -- body").fg, "CFCFCFFF")
+        // The same code as a `text` fence is not tinted (R-08: plain for other hints).
+        XCTAssertEqual(runAttributes(CodeRenderer.shared.render(code: code, languageHint: "text", theme: .highContrast, zoom: 1), "--- stale comment").bg, nil)
+    }
+
+    /// C-05.1: the table's values for every theme id.
+    func testDiffColourTable() {
+        let expected: [String: [String]] = [
+            "high-contrast": ["1A7F37", "DAFBE1", "CF222E", "FFEBE9"], "sevilla": ["4F7138", "E3E5C9", "8C2A1A", "F0DCD0"],
+            "charcoal": ["7EE787", "0E2B1A", "FF7B72", "3D1416"], "solarium-daylight": ["859900", "EAE9CD", "DC322F", "F0D8D2"],
+            "solarium-moonlight": ["859900", "0F2E1A", "DC322F", "3A1817"], "phosphor": ["CFCFCF", "1A1A1A", "888888", "141414"],
+            "twilight": ["A6E3B0", "122319", "F8B3B0", "271419"], "standard-erin-light": ["4F7138", "E3E5C9", "8C2A1A", "F0DCD0"],
+            "standard-erin-dark": ["C9C19A", "222B1A", "847C6A", "2A211A"],
+        ]
+        for t in MDVTheme.all {
+            let d = t.diffColors
+            XCTAssertEqual([d.add, d.addBackground, d.remove, d.removeBackground].map { String($0.hex.prefix(6)) }, expected[t.id], t.id)
+        }
+    }
 }

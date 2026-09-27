@@ -15,6 +15,7 @@ public final class Preferences: ObservableObject {
         public static let editorAppPath = "mdv6_editor_app_path"
         public static let history = "mdv6_history"
         public static let mermaidStyle = "mdv6.mermaid.style"
+        public static let showFrontmatter = "mdv6_show_frontmatter"
     }
 
     /// K-04: inspector width, persisted, clamped to [180, 520].
@@ -40,6 +41,7 @@ public final class Preferences: ObservableObject {
         editorAppPath = (defaults.object(forKey: Key.editorAppPath) as? String) ?? ""
         let style = (defaults.object(forKey: Key.mermaidStyle) as? String) ?? "document"
         mermaidStyle = Preferences.mermaidStyles.contains(style) ? style : "document"
+        showFrontmatter = Preferences.readBool(defaults, Key.showFrontmatter, default: true)
     }
 
     /// Theme id or `system`; an unknown value is kept as stored and resolves to `high-contrast` at use (C-04, ThemeCatalog).
@@ -56,6 +58,9 @@ public final class Preferences: ObservableObject {
     @Published public var editorAppPath: String { didSet { defaults.set(editorAppPath, forKey: Key.editorAppPath) } }
     /// R-09: `document`, `light`, `dark`, `tokyoNight`, `catppuccin`; unknown reads as `document`.
     @Published public var mermaidStyle: String { didSet { defaults.set(mermaidStyle, forKey: Key.mermaidStyle) } }
+
+    /// R-44: View → Show Frontmatter (C-04, default true).
+    @Published public var showFrontmatter: Bool { didSet { defaults.set(showFrontmatter, forKey: Key.showFrontmatter) } }
 
     public static let mermaidStyles = ["document", "light", "dark", "tokyoNight", "catppuccin"]
 

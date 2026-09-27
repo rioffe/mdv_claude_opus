@@ -1,5 +1,7 @@
 import XCTest
 import AppKit
+import SwiftUI
+import MarkdownUI
 @testable import mdv6Core
 
 /// The article's pure rules: R-24/E-17 find rendering, R-08 fence parts and copy-without-prompts, §7.2 width plumbing
@@ -74,5 +76,122 @@ final class ArticleTests: XCTestCase {
         let item = MathMarkdown.rewrite("- $$c+d$$", fontSize: 16, headingSizeEms: [], color: .black)
         let itemURL = URL(string: String(item.dropFirst("- ![](".count).dropLast()))!
         XCTAssertFalse(MathMarkdown.isOwnParagraph(url: itemURL))
+    }
+
+    // MARK: v0.14 — C-22.2 `<img>`, R-16 inline images, C-20.3 / R-44 frontmatter, C-09.1 find typography
+
+    /// A solid red PNG of the given point size in a temp directory; returns the directory.
+    private func redImageDirectory(width: Int, height: Int) throws -> URL {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("mdv6-img-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                            space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        ctx.setFillColor(CGColor(srgbRed: 1, green: 0, blue: 0, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        try NSBitmapImageRep(cgImage: ctx.makeImage()!).representation(using: .png, properties: [:])!.write(to: dir.appendingPathComponent("red.png"))
+        return dir
+    }
+
+    private func redBounds(_ markdown: String, dir: URL, width: CGFloat = 860) throws -> CGRect? {
+        var o = DocumentRenderer.Options(); o.scale = 1; o.width = width; o.baseURL = dir
+        let img = try DocumentRenderer.render(markdown: markdown, options: o)
+        guard let bm = Bitmap(image: img, crop: CGRect(origin: .zero, size: img.size), onWhite: true) else { return nil }
+        var minX = Int.max, minY = Int.max, maxX = -1, maxY = -1
+        for y in 0 ..< bm.height { for x in 0 ..< bm.width {
+            let p = bm.pixel(x, y)
+            if p.r > 200 && p.g < 60 && p.b < 60 { minX = min(minX, x); minY = min(minY, y); maxX = max(maxX, x); maxY = max(maxY, y) }
+        } }
+        return maxX < 0 ? nil : CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1)
+    }
+
+    /// R-51, C-22.2: a block `<img>` draws at the size its attributes ask for (caps, aspect kept, never enlarged). T-59.
+    func testRawHTMLImageSizes() throws {
+        let dir = try redImageDirectory(width: 928, height: 744)
+        let w320 = try XCTUnwrap(try redBounds(#"<img src="red.png" alt="x" width="320">"#, dir: dir))
+        XCTAssertEqual(w320.width, 320, accuracy: 1.5); XCTAssertEqual(w320.height, 320 * 744 / 928, accuracy: 1.5)
+        let both = try XCTUnwrap(try redBounds(#"<img src="red.png" width="240" height="80">"#, dir: dir))
+        XCTAssertEqual(both.height, 80, accuracy: 1.5); XCTAssertEqual(both.width, 80 * 928 / 744, accuracy: 1.5)
+        let h60 = try XCTUnwrap(try redBounds(#"<img src="red.png" height="60">"#, dir: dir))
+        XCTAssertEqual(h60.height, 60, accuracy: 1.5)
+        let natural = try XCTUnwrap(try redBounds(#"<img src="red.png">"#, dir: dir))
+        XCTAssertLessThanOrEqual(natural.width, 768 + 1)                        // shrunk to the column, never above
+        let small = try redImageDirectory(width: 40, height: 20)
+        let capped = try XCTUnwrap(try redBounds(#"<img src="red.png" width="300">"#, dir: small))
+        XCTAssertEqual(capped.width, 40, accuracy: 1.5)                         // never enlarged
+    }
+
+    /// R-16, C-22.2: an inline `<img>` in a sentence draws at its asked size; an inline Markdown image loads from beside
+    /// the document; a missing inline image leaves the sentence's other images intact. T-59.
+    func testInlineImages() throws {
+        let dir = try redImageDirectory(width: 928, height: 744)
+        let inline = try XCTUnwrap(try redBounds(#"one <img src="red.png" alt="i" width="120"> two"#, dir: dir))
+        XCTAssertEqual(inline.width, 120, accuracy: 1.5)
+        let md = try XCTUnwrap(try redBounds("text ![small](red.png) more", dir: try redImageDirectory(width: 30, height: 30)))
+        XCTAssertEqual(md.width, 30, accuracy: 1.5)
+        let mixed = try XCTUnwrap(try redBounds(#"a <img src="nope.png" width="50"> b <img src="red.png" width="40"> c"#, dir: dir))
+        XCTAssertEqual(mixed.width, 40, accuracy: 1.5)
+    }
+
+    /// F-173, R-12, D-02: the new inline provider leaves inline math exactly where the math provider put it.
+    func testInlineMathPlacementUnchanged() throws {
+        let t = MDVTheme.highContrast
+        let text = MathMarkdown.rewrite("sum $x_i^2$ and $\\frac{a}{b}$ here", fontSize: t.baseFontSize, headingSizeEms: t.headingSizeEms, color: t.rgba.text)
+        func render(_ provider: some InlineImageProviderBox) throws -> Bitmap {
+            let view = provider.apply(Markdown(text).markdownTheme(ArticleTheme.markdownTheme(for: t, zoom: 1)))
+                .frame(width: 600, alignment: .leading).background(t.background)
+            let img = try DocumentRenderer.snapshot(AnyView(view), width: 600, scale: 2, background: t.rgba.background)
+            return try XCTUnwrap(Bitmap(image: img, crop: CGRect(origin: .zero, size: img.size), onWhite: true))
+        }
+        let before = try render(MathOnly())
+        let after = try render(Article())
+        XCTAssertLessThanOrEqual(try XCTUnwrap(RenderMetrics.pixelMismatch(before, after)), 0.001)
+    }
+
+    /// C-20.3, R-44, I-018: the header renders as a table above the body; hidden, it takes no height, padding or spacing,
+    /// so the body starts exactly where it would in the same document without a header. T-52.
+    func testFrontmatterTableAndHidden() throws {
+        let header = "---\ntitle: The Lighthouse\nstatus: draft\n---\n\n"
+        let body = "# Heading\n\nA paragraph."
+        func render(_ md: String, show: Bool) throws -> Bitmap {
+            var o = DocumentRenderer.Options(); o.scale = 1; o.showFrontmatter = show
+            let img = try DocumentRenderer.render(markdown: md, options: o)
+            return try XCTUnwrap(Bitmap(image: img, crop: CGRect(origin: .zero, size: img.size), onWhite: true))
+        }
+        let page = MDVTheme.highContrast.rgba.background
+        let plain = try render(body, show: true)
+        let hidden = try render(header + body, show: false)
+        let shown = try render(header + body, show: true)
+        XCTAssertEqual(RenderMetrics.inkBands(hidden, page: page).first, RenderMetrics.inkBands(plain, page: page).first)
+        XCTAssertEqual(hidden.height, plain.height)
+        XCTAssertGreaterThan(shown.height, plain.height + 40)                 // a two-row table sits above the heading
+        XCTAssertLessThan(RenderMetrics.inkBands(shown, page: page).first!.lowerBound, RenderMetrics.inkBands(plain, page: page).first!.lowerBound + 1)
+    }
+
+    /// R-24, C-09.1: a heading with a find match keeps its height (face, size, leading); a header takes the verbatim
+    /// path, fence lines included, whatever the tint tests say. T-60, T-52.
+    func testFindTypographyAndVerbatimHeader() throws {
+        func height(_ md: String, query: String?) throws -> CGFloat {
+            var o = DocumentRenderer.Options(); o.scale = 1; o.findQuery = query
+            return try DocumentRenderer.render(markdown: md, options: o).size.height
+        }
+        for block in ["# The title", "## The subtitle", "### The third", "A paragraph with **the** strong `code` and _the_ emphasis."] {
+            XCTAssertEqual(try height(block, query: "the"), try height(block, query: nil), accuracy: 1.5, block)
+        }
+        XCTAssertEqual(FindHighlight.mode(block: "---\nimage: ![x](y)\n---", isHeader: true), .verbatim)
+        XCTAssertEqual(FindHighlight.mode(block: "text ![x](y)", isHeader: false), .tint)
+        XCTAssertEqual(FindHighlight.mode(block: "plain", isHeader: false), .inline)
+        let v = FindHighlight.verbatimAttributedString(block: "---\ntitle: **bold** fog\n---", query: "fog", theme: .highContrast)
+        XCTAssertEqual(String(v.characters), "---\ntitle: **bold** fog\n---")
+        XCTAssertEqual(FindHighlight.markedCount(v), 1)
+        XCTAssertEqual(FindHighlight.markedCount(FindHighlight.verbatimAttributedString(block: "---\na: b\n---", query: "---", theme: .highContrast)), 2)
+    }
+}
+
+/// Two inline providers behind one protocol, so the placement test renders the same text through each.
+protocol InlineImageProviderBox { func apply<V: View>(_ v: V) -> AnyView }
+struct MathOnly: InlineImageProviderBox { func apply<V: View>(_ v: V) -> AnyView { AnyView(v.markdownInlineImageProvider(MathInlineImageProvider(scale: 2))) } }
+struct Article: InlineImageProviderBox {
+    func apply<V: View>(_ v: V) -> AnyView {
+        AnyView(v.markdownInlineImageProvider(ArticleInlineImageProvider(theme: .highContrast, scale: 2, baseURL: nil, loadRemote: false, remoteLoader: nil)))
     }
 }

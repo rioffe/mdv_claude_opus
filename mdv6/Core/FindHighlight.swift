@@ -83,6 +83,63 @@ public enum FindHighlight {
         return out
     }
 
+    /// R-24's three renderings of a matching block.
+    public enum Mode: Equatable, Sendable { case inline, tint, verbatim }
+
+    /// R-24: a frontmatter header always takes the verbatim path, whatever the tint tests say (F-159); otherwise E-17.
+    public static func mode(block: String, isHeader: Bool) -> Mode {
+        if isHeader { return .verbatim }
+        return shouldInlineHighlight(block: block) ? .inline : .tint
+    }
+
+    /// R-24 (F-159, F-179): block 0's source exactly as written — fence lines included, no inline-Markdown
+    /// interpretation — with every occurrence marked, so what is displayed is what `m` counts.
+    public static func verbatimAttributedString(block: String, query: String, theme: MDVTheme) -> AttributedString {
+        var out = AttributedString(block)
+        out.foregroundColor = theme.text
+        guard !query.isEmpty else { return out }
+        var search = block.startIndex..<block.endIndex
+        while let r = block.range(of: query, options: [.caseInsensitive], range: search) {
+            if let lo = AttributedString.Index(r.lowerBound, within: out), let hi = AttributedString.Index(r.upperBound, within: out), lo < hi {
+                out[lo..<hi].backgroundColor = theme.accent.opacity(0.35)
+                out[lo..<hi][FindMarkKey.self] = true
+            }
+            search = r.upperBound..<block.endIndex
+        }
+        return out
+    }
+
+    /// C-09.1 inline runs: code → system monospace at round(0.90 × size) on the secondary background; strong → the
+    /// theme's strong weight and colour; emphasis → italic; strikethrough; link → the link colour. The renderer's own
+    /// presentation intents are cleared once mapped so they are not applied twice.
+    public static func styled(_ attr: AttributedString, style: FindBlockStyle, theme: MDVTheme) -> AttributedString {
+        var out = attr
+        let runs = out.runs.map { ($0.range, $0.inlinePresentationIntent ?? [], $0.link) }
+        for (range, intent, link) in runs {
+            var font: Font? = nil
+            if intent.contains(.code) {
+                font = .system(size: style.codeSize, design: .monospaced)
+                out[range].backgroundColor = theme.secondaryBackground
+            }
+            if intent.contains(.stronglyEmphasized) {
+                font = (font ?? ArticleTheme.font(for: theme.bodyFontFamily, size: style.size)).weight(theme.strongFontWeight)
+                out[range].foregroundColor = theme.strong
+            }
+            if intent.contains(.emphasized) { font = (font ?? ArticleTheme.font(for: theme.bodyFontFamily, size: style.size)).italic() }
+            if intent.contains(.strikethrough) { out[range].strikethroughStyle = .single }
+            if link != nil { out[range].foregroundColor = theme.link }
+            if let font { out[range].font = font }
+            out[range].inlinePresentationIntent = nil
+            if style.colorRole != .text, link == nil, !intent.contains(.stronglyEmphasized) { out[range].foregroundColor = color(style.colorRole, theme) }
+        }
+        return out
+    }
+
+    /// C-09.1 colour roles.
+    public static func color(_ role: FindBlockStyle.ColorRole, _ theme: MDVTheme) -> Color {
+        switch role { case .text: return theme.text; case .heading: return theme.heading; case .tertiaryText: return theme.tertiaryText }
+    }
+
     /// Marks a highlighted occurrence (for tests).
     public enum FindMarkKey: AttributedStringKey { public typealias Value = Bool; public static let name = "mdv6.findMark" }
 
