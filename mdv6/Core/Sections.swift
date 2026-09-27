@@ -16,7 +16,7 @@ public func sectionMarkdown(blocks: [String], tocHeadings: [TOCHeading], heading
 /// C-12: removes trailing `#`s, `**`, `__`, backticks, unescaped `*`, both underscores of an `_…_` pair whose opening
 /// `_` is not preceded by a letter or digit (word-internal underscores are kept), and reduces `[text](url)` to `text`.
 public func stripInlineMarkdown(_ input: String) -> String {
-    var s = input
+    var s = RawHTMLImages.stripTags(input)                  // step (0): `<img …>` tags removed whole (C-12, F-171)
     // trailing closing #s
     while let last = s.last, last == "#" || last == " " {
         if last == "#" || s.hasSuffix(" #") || s.dropLast().last == "#" { s.removeLast() } else { break }

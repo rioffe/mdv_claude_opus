@@ -8,7 +8,7 @@ public enum MDVMermaidPipeline {
 
     /// C-06.1: rules 1…6 in this order.
     public static func sanitize(_ source: String) -> String {
-        var s = dropFrontMatter(source)                                   // 1
+        var s = dropFrontMatter(MermaidDispatch.stripPreamble(source))    // 0 (the C-06.4 preamble, F-152), then 1
         s = renameXYSeries(s)                                             // 2
         var lines = s.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         lines = lines.map(normalizeColors)                                // 3

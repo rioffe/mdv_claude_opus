@@ -136,4 +136,38 @@ final class SplitTests: XCTestCase {
         XCTAssertEqual(sectionMarkdown(blocks: doc.blocks, tocHeadings: doc.tocHeadings, headingAt: d), "## D\n\np5")
         XCTAssertEqual(sectionRange(blocks: doc.blocks, tocHeadings: doc.tocHeadings, headingAt: 0), 0..<10)
     }
+
+    // MARK: C-02 rule 9 (frontmatter) and R-04's BOM
+
+    /// C-02 rule 9: a header is block 0 whatever blank lines it holds; the body splits after it; `blockLines` stay in
+    /// whole-document lines; `frontmatter` is set only with a header. R-44, I-018, T-52.
+    func testFrontmatterIsBlockZero() {
+        let raw = "---\ntitle: x\n\n# a comment\nsummary: y\n---\n# Heading\n\npara\n"
+        let doc = ParsedDocument(raw: raw)
+        XCTAssertEqual(doc.blocks, ["---\ntitle: x\n\n# a comment\nsummary: y\n---", "# Heading", "para"])
+        XCTAssertEqual(doc.blockLines, [1 ..< 7, 7 ..< 8, 9 ..< 10])
+        XCTAssertEqual(doc.lineCount, 9)
+        XCTAssertEqual(doc.frontmatter, [FrontmatterRow(key: "title", value: "x"), FrontmatterRow(key: "summary", value: "y")])
+        XCTAssertEqual(doc.tocHeadings.map(\.blockIndex), [1])            // the header is never a TOC heading
+        XCTAssertNil(ParsedDocument(raw: "# Heading\n\npara").frontmatter)
+        // A header with no blank lines, followed by a blank line, splits as before v0.14 (rule 9's compatibility claim).
+        XCTAssertEqual(ParsedDocument(raw: "---\na: b\n---\n\nbody").blocks, ParsedDocument.parseBlocks("---\na: b\n---\n\nbody"))
+        // CRLF gives the same split (rule 6 runs first).
+        XCTAssertEqual(ParsedDocument(raw: raw.replacingOccurrences(of: "\n", with: "\r\n")).blocks, doc.blocks)
+    }
+
+    /// C-19 over a header: a line inside it resolves to block 0 (C-02 rule 8 unchanged by rule 9). E-31, T-52.
+    func testLineCitationIntoHeaderResolvesToBlockZero() {
+        let doc = ParsedDocument(raw: "---\na: b\nc: d\n---\n\nbody\n")
+        XCTAssertEqual(lineCitationBlock(LineCitation.parse("L2")!, in: doc), 0)
+        XCTAssertEqual(lineCitationBlock(LineCitation.parse("L6")!, in: doc), 1)
+    }
+
+    /// R-04: one leading U+FEFF is removed before C-02, so a BOM copy splits and recognises its header like the plain one.
+    func testBOMStripped() {
+        let plain = "---\na: b\n---\n\nbody"
+        XCTAssertEqual(ParsedDocument.stripBOM("\u{FEFF}" + plain), plain)
+        XCTAssertEqual(ParsedDocument.stripBOM(plain), plain)
+        XCTAssertEqual(ParsedDocument(raw: ParsedDocument.stripBOM("\u{FEFF}" + plain)).frontmatter, ParsedDocument(raw: plain).frontmatter)
+    }
 }

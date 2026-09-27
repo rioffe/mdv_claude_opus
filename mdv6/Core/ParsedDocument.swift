@@ -25,14 +25,32 @@ public struct ParsedDocument: Equatable {
     /// C-02 rule 8: the normalised line count (rule 6; a trailing newline adds no empty final line).
     public let lineCount: Int
     public let tocHeadings: [TOCHeading]
+    /// C-02 rule 9: the C-20.2 rows of `blocks[0]` when it is a frontmatter header; nil when there is none (R-44).
+    public let frontmatter: [FrontmatterRow]?
 
     public init(raw: String) {
         self.raw = raw
-        let split = ParsedDocument.split(raw)                 // one split per load (I-004)
+        let normalized = ParsedDocument.normalizeLineEndings(raw)
+        var split = ParsedDocument.split(normalized)          // one split per load (I-004)
+        var frontmatter: [FrontmatterRow]? = nil
+        if let span = frontmatterSpan(in: normalized) {      // rule 9: the header is block 0, whatever it contains
+            let body = ParsedDocument.split(String(normalized[span.bodyStart...]))
+            let c = span.closingLine
+            split = ([span.block] + body.blocks,
+                     [1 ..< (c + 1)] + body.lines.map { ($0.lowerBound + c) ..< ($0.upperBound + c) },
+                     split.lineCount)
+            frontmatter = frontmatterRows(span.block)
+        }
         self.blocks = split.blocks
         self.blockLines = split.lines
         self.lineCount = split.lineCount
         self.tocHeadings = ParsedDocument.parseTOC(blocks: split.blocks)
+        self.frontmatter = frontmatter
+    }
+
+    /// R-04: one leading U+FEFF (a UTF-8 byte-order mark) is removed after decoding, before C-02 runs.
+    public static func stripBOM(_ s: String) -> String {
+        s.unicodeScalars.first == "\u{FEFF}" ? String(s.unicodeScalars.dropFirst()) : s
     }
 
     public static func == (a: ParsedDocument, b: ParsedDocument) -> Bool { a.raw == b.raw }

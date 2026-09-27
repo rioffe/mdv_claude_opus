@@ -35,7 +35,8 @@ public final class FileSystem {
             if let size = attrs[.size] as? Int, !ContentLimits.admits(size, kind: .document) { throw ReadError.tooLarge }
             guard let data = FileManager.default.contents(atPath: path) else { throw ReadError.unreadable }
             if !ContentLimits.admits(data.count, kind: .document) { throw ReadError.tooLarge }
-            guard let text = String(data: data, encoding: .utf8) else { throw ReadError.notUTF8 }
+            guard let decoded = String(data: data, encoding: .utf8) else { throw ReadError.notUTF8 }
+            let text = ParsedDocument.stripBOM(decoded)                  // R-04: one leading U+FEFF removed before C-02
             return text
         },
         directoryContents: { (try? FileManager.default.contentsOfDirectory(atPath: $0)) ?? [] }
