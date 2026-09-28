@@ -187,10 +187,10 @@ The §9.1 tests read the built bundle, so build first:
 
 ```bash
 make                                                  # build/mdv6.app; codesign --verify --deep --strict passes
-swift test --parallel --xunit-output junit.xml         # the whole suite (T-32 runs the 35 s idle-CPU protocol)
+swift test --parallel --xunit-output junit.xml         # the whole suite (T-32 runs the 35 s idle-CPU protocol; T-34 clones upstream SwiftMath, so it needs the network)
 speccheck check --spec SPEC.md --src mdv6/Core --tests Tests --results junit.xml --judge mock --strict --out build/speccheck
 export SPECCHECK_JUDGE_URL=https://openrouter.ai/api/v1/chat/completions SPECCHECK_JUDGE_MODEL=openai/gpt-6-luna-pro SPECCHECK_JUDGE_API_KEY="$OPENROUTER_API_KEY"
-speccheck check --spec SPEC.md --src mdv6/Core --tests Tests --results junit.xml --judge llm --strict --out build/speccheck-llm
+speccheck check --spec SPEC.md --src mdv6/Core --tests Tests --results junit.xml --judge llm --judge-concurrency 16 --strict --out build/speccheck-llm
 swift run --package-path tools/render-harness render-harness --scan test-docs/mermaid --output-dir "$TMPDIR/mdv6-scan"
 swift run --package-path tools/render-harness render-harness --check test-docs/render-cases.json
 swift run --package-path tools/render-harness render-harness test-docs/math.md --print-pdf "$TMPDIR/m.pdf"   # T-53's scripted half

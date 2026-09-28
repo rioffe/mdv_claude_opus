@@ -1,10 +1,10 @@
-# Spec build report — mdv6 (implementing `SPEC.md` v0.13)
+# Spec build report — mdv6 (implementing `SPEC.md` v0.14.8)
 
-> - **Spec:** `SPEC.md` v0.13, sha256 `498ac664dc9e36115e10a433d06e38ffeff0f9149d26002a27a8f87d5670eaa0`; `TYPOGRAPHY.md` and `reference/*.png` as the spec ships them. W0–W7 built v0.11/v0.11.2; **W8** (§1, §5b) added the v0.12 line-citation feature after the seventh review (F-126..F-138) was applied as v0.12.1; **W9** (§1, §5c) added R-43 — C++, Metal, OpenCL, JSON, Lua, Perl and Markdown highlighting — as v0.13 on the user's direct instruction. The spec was edited during the build, all recorded below; no id was renumbered.
-> - **Plan:** `IMPLEMENTATION_PLAN.md` (7d552a2, amended at c535a03 for v0.12.1 + W8) and `DETAILED_IMPLEMENTATION_PLAN_W0..W8.md`; the §7 fork (T-43 on a host with no signing identity) was answered by the user: *record as pending*. W9 was **not** preceded by a wave document: the user asked for the feature directly, so the wave ran on that instruction and this report carries its ledger (§1, §5c) — the one deviation from the plan-first rule, stated here rather than hidden.
-> - **Built tree:** waves W0–W7 each committed after its gate (W7 at `5cb1f2e`, report at `7be647b`), the user's live-use findings fixed as F-005…F-010, the seventh review applied as v0.12.1 (`ff8cde7`, `ebb6acd`), W8 at `e61c60f`, then W9 at `8e0b200`. Sibling folders were not consulted (user instruction).
-> - **Gate:** `swift test --parallel --xunit-output junit.xml` → 173 tests, 0 failures; speccheck Phase A `CONFORMING` 175/175, exit 0. Phase B (LLM judge) is *not* clean — 170/175 with 5 weak pre-existing rows and `unknown_rate` above the bound; see §7 for why none of them is this change.
-> - **Verdict:** **VERIFICATION PENDING** — every id is realised and mechanically proved; the §9.6 observed tests (T-44, T-47, T-48, T-49) were driven with real pointer and keyboard input and captured with `screencapture`, the W9 captures were reviewed by the user, and the agent compared the captures against `reference/`; the spec requires a *person's* look on the remaining §9.6 set, and T-43's credentialed run cannot be done on this host (§5, §5b, §5c).
+> - **Spec:** `SPEC.md` v0.14.8, sha256 `1457ad3bf642e3d2cd6abe89b9563f888f69af8ccee9c209214b61230c7fca90`; `TYPOGRAPHY.md` and `reference/*.png` (including the §9.7 `ORIGINAL-*.png` set) as the spec ships them. W0–W7 built v0.11/v0.11.2; W8 added line citations (v0.12.1); W9 added R-43 (v0.13). **W10–W15** (§1, §2b, §5d) built the v0.14 delta — the original's post-v0.7 features R-44…R-51 — after the eighth and ninth reviews were applied (v0.14.1, v0.14.4). The spec was edited during that build by four `fix(spec)` commits (v0.14.5–v0.14.8), all recorded below; no id was renumbered.
+> - **Plan:** `IMPLEMENTATION_PLAN.md` Part II and `DETAILED_IMPLEMENTATION_PLAN_W10..W15.md` (`96db3f8`). The Part II fork — whether the original's source may be read — was answered by the user: **spec + black box** (the original was run, never read). D-54 is unconfirmed, so C-18.7 stands (no hover stripe on fences).
+> - **Built tree:** W10 `a78d2ec`, W11 `0a37af6` + `fadca46` (+ `780d306`), W12 `ba1e068`, W13 `a187368`, W14 `365b4d4`, W15 `731514c` (observed-pass defects) and `bce5111` (README, Help).
+> - **Gate:** `swift test --parallel --xunit-output junit.xml` → 236 tests, 0 failures, 0 build warnings; speccheck Phase A `CONFORMING` 210/210, exit 0; Phase B 209/210 — one weak row, E-19, whose selection clause no headless test reaches (§3.0, §7).
+> - **Verdict:** **VERIFICATION PENDING** — every id is realised and mechanically proved; the W15 observed pass ran while this Mac's console was locked (`CGSSessionScreenIsLocked = 1`), so `screencapture` and real pointer input were unavailable and the app's own snapshot hook stood in (§5d). R-01's `open -g` activation, R-45's print panel and R-46's right-click menu, wheel and VoiceOver are *verification pending* in §11, and the spec requires a person's look at T-52, T-53 (manual half), T-54, T-58 and T-59. T-43's credentialed run remains pending as before.
 
 ---
 
@@ -30,6 +30,14 @@ Every wave ran its `DETAILED_IMPLEMENTATION_PLAN_W<n>.md` §6 gate before its co
 | W8 plan | c535a03 | `sha256sum SPEC.md` recorded in `IMPLEMENTATION_PLAN.md` (v0.12.1, `16c9d437…`) | — |
 | W8 Line citations | e61c60f | `make`; `swift test` (129/0); `swift test --parallel --xunit-output junit.xml` (171/0); `speccheck … --judge mock --strict` → **CONFORMING 173/173**; on-screen pass with `tools/click.swift` + a real link click (§5b) | 0 |
 | W9 Seven more languages (R-43) | 8e0b200 | `make` + `codesign --verify --deep --strict` (0); `swift test --parallel --xunit-output junit.xml` (173/0); `speccheck … --judge mock --strict` → **CONFORMING 175/175**, 0 dangling, 0 stale; observed pass on `test-docs/code.md` — `tools/observe.sh` + the `scrollTo` drive action, `build/observed/T-51-code-*.png`, **looked at by the user** (§5c) | 0 |
+
+| W10–W15 plan | 96db3f8 | `IMPLEMENTATION_PLAN.md` Part II, `DETAILED_IMPLEMENTATION_PLAN_W10..W15.md`; spec digest recorded (v0.14.4) | — |
+| W10 v0.14 pure contracts | a78d2ec | `swift build`; `swift test --filter "FrontmatterTests\|SplitTests\|DiffClassifyTests\|MermaidDispatchTests\|RawHTMLImagesTests\|FindStyleTests\|V014FormulaTests\|TypographyTests\|MermaidSanitizeTests\|MiscContractTests"`; `swift test --parallel --xunit-output junit.xml` | 0 |
+| W11 Vendored MarkdownUI + renderers | 0a37af6, fadca46, 780d306 | `swift build` (0 warnings); `swift test --filter "VendorMarkdownUITests\|CodeRendererTests\|ArticleTests\|ImageLoadingTests\|HarnessTests\|RhythmAndDisplayMathTests"`; `render-harness test-docs/raw-html-images.md --output`; `swift test --parallel --xunit-output junit.xml` | 0 |
+| W12 Session and window commands | ba1e068 | `swift test --filter "SessionTests\|ChromeModelTests\|PersistenceTests"`; `swift test --parallel --xunit-output junit.xml`; drive-hook pass (End, ⌃⇥, ⌘W, Close All) with `tools/observe.sh` | 0 |
+| W13 The Mermaid web path | a187368 | `bash tools/fetch-mermaid.sh verify`; `swift test --filter "MermaidWebTests\|MermaidTests\|HarnessTests\|BuildAndLauncherTests"`; `render-harness --scan test-docs/mermaid` (10 pass, 5 web); `swift test --parallel --xunit-output junit.xml`; snapshot of `gantt.md` | 0 |
+| W14 Printing | 365b4d4 | `swift test --filter "PrintTests\|HarnessTests"` (T-53 (1)–(8), E-33); `render-harness test-docs/math.md --print-pdf`; `swift test --parallel --xunit-output junit.xml` | 0 |
+| W15 Prove it | 731514c, bce5111 | `make` + `codesign --verify --deep --strict`; `bash tools/gate-w0.sh` (all PASS after its bundle-not-found clause was made independent of an installed `/Applications/mdv6.app`); `swift test --parallel --xunit-output junit.xml` (236/0 after the Phase B test fixes); Phase A → **CONFORMING 210/210**; Phase B 209/210 (§3.0); every README command re-run (§4); snapshot-hook observed pass (§5d) | 0 |
 
 `README.md` was written in W7 from the built tree and landed in the W7 commit (5cb1f2e) rather than a separate `docs(mdv6)` commit; every command block in it was re-run as written before this report (§4).
 
@@ -63,6 +71,21 @@ Also reported: "search history does not seem to work". Not reproduced — ⌘⇧
 
 No spec row was weakened; `SPEC.md` was edited only by the two `fix(spec)` commits.
 
+## 2b. Defects found during the v0.14 build (W10–W15)
+
+| ID | Where | What was off | Resolution |
+|---|---|---|---|
+| F-182 | `SPEC.md` C-09.1 | The find-highlight heading padding was specified as a fixed value; the article's own heading padding is 0.3 × the body size and applies only above a drawn rule, so a heading jumped in height when the find bar opened (seen in Sevilla at 125 %). | `fix(spec): v0.14.5` (`79708a0`); `FindBlockStyle` follows it, `FindStyleTests`. Observed stable: `build/observed/v014-find-before.png` / `v014-find-after.png`. |
+| F-183 | `SPEC.md` R-46 / R-37 | The spec placed `mermaid.min.js` as a SwiftPM resource; a clean checkout (where the fetched script is absent) then warns about an excluded missing file, breaking R-37's clean build. | `fix(spec): v0.14.6` (`0e00e79`) — the script lives in `Vendor/mermaid/`, outside every target, fetched and digest-checked by `tools/fetch-mermaid.sh`; the licence is `Vendor/mermaid/LICENSE.txt`. |
+| F-184 | `SPEC.md` T-53 (2) | An accepted inline formula is drawn by a second pass that leaves a 1 × 1-pixel transparent spacer image in its rect, so "no image in an accepted formula's rect" failed on a correct build. | `fix(spec): v0.14.7` (`4906239`) — the spacer is excluded by pixel size; `PrintTests.testVectorFormulas` filters it. |
+| — | `SPEC.md` §11, Status | §11 still marked C-19/E-31/T-49/T-50 *not yet realised* (stale since W8) and the v0.14 rows unbuilt. | `fix(spec): v0.14.8` (`dc544cf`) — §11 follows the tree; R-01, R-45, R-46 carry *verification pending*. |
+| F-185 | `CodeBlockChrome` | The code-block language label sat top-trailing; `reference/ORIGINAL-DIFF.png` shows it top-leading. | `.topLeading` overlay (`731514c`); `build/observed/v014-diff.png`. |
+| F-186 | `WindowAccessor.configure` | A fresh window made the history list first responder, so ↓ stepped the history instead of scrolling the document (R-49). | `initialFirstResponder = nil`, `makeFirstResponder(nil)` (`731514c`); ↓ scrolls in `w12-*.png`. |
+| — | render harness (pre-existing) | The offscreen renderer never drew inline images — math included — because MarkdownUI's inline image loading is asynchronous and the snapshot was taken first. | Inline images resolved up front through the vendored hook (`resolvesInlineImagesUpFront`, W11). |
+| — | `DocumentSession.open(…persistOutgoing:)` | Deleting the displayed row wrote an orphan scroll-position row for the file just removed. | The outgoing position is not persisted on delete/close (W12). Found by reading the code path; no dedicated regression test. |
+| — | `WindowAccessor` drive hook (apparatus) | Every window took a driven command, so one Close All drive raised two sheets. | The hook acts only when `session.model.targetWindow === window` (`731514c`). |
+
+
 ## 3. The speccheck gate (final test run)
 
 Final run, on the F-005…F-009 tree, after `make`:
@@ -80,6 +103,30 @@ Phase B judge: `openai/gpt-4o-mini` via OpenRouter (`SPECCHECK_JUDGE_URL=https:/
 The first Phase B run of W7 returned 10 `WEAKLY_PASSING` ids (R-07, R-09, K-15, T-32, E-25, E-30, T-22, T-28, T-43, T-44) and a second run 3 (K-11, T-30, T-43). Each was fixed in the **test**, never by re-pointing a citation at a weaker test: R-07 now asserts GFM constructs change the raster (strike-through ink, task checkbox, footnote height, table rows); R-09 asserts the style menu, `mdv6.mermaid.style` persistence across a fresh `UserDefaults`, the 2× PNG export size and the plain-monospace source view; K-15/T-32 parse the 30 samples and assert median ≤ 1 % and nearest-rank p95 ≤ 3 %; E-25 asserts `renderGeneration` bumps on every load/reload and not on an aborted load; E-30 quits with two windows and relaunches into exactly one (R-40 head); T-30 asserts the click → pasteboard/flash/re-flash rules and that a `####` heading is never a copy target; T-43/K-11 dry-run the whole release chain in a disposable clone tagged `v1.2.3` and assert the artefact names, the codesign/notarytool/stapler/spctl steps in §5.3 order, and that `VERSION=9.9.9` is refused before any artefact is named. Two suite-level flakes surfaced by the parallel runner were also fixed in the tests: the idle-CPU test now waits for sibling `xctest` workers to drain (K-15 is defined on an *otherwise idle* host), and the FSEvents burst test allows one batch per 50 ms window the burst actually spanned.
 
 Note for the record: speccheck's Swift adapter treats `//` inside a string literal as a comment; test files keep `//` out of literals on lines with braces (`RecordingServer.slashes`).
+
+### 3.0 The v0.14 gate (speccheck 1.20.0, 2026-09-27)
+
+```text
+swift test --parallel --xunit-output junit.xml      → 236 tests, 0 failures (junit.xml); swift build → 0 warnings
+speccheck check --spec SPEC.md --src mdv6/Core --tests Tests --results junit.xml --judge mock --strict --out build/speccheck
+speccheck: CONFORMING - 210/210 passing (100.0%), 0 failing, 0 skipped, 0 weak, 0 unverified, 0 untested, 0 uncited; 0 dangling, 0 stale; judge=mock
+export SPECCHECK_JUDGE_URL=https://openrouter.ai/api/v1/chat/completions SPECCHECK_JUDGE_MODEL=openai/gpt-6-luna-pro SPECCHECK_JUDGE_API_KEY="$OPENROUTER_API_KEY"
+speccheck check --spec SPEC.md --src mdv6/Core --tests Tests --results junit.xml --judge llm --judge-concurrency 16 --strict --out build/speccheck-llm
+speccheck: NOT CONFORMING - 209/210 passing (99.5%), 0 failing, 0 skipped, 1 weak, 0 unverified, 0 untested, 0 uncited; 0 dangling, 0 stale; judge=llm
+```
+
+Phase B judge: `openai/gpt-6-luna-pro` via OpenRouter; `judge_available: true`, `unknown_rate` 0.033. Three Phase B runs, each fixed in the **test**:
+
+1. (serial, 34 min) 204/210, `unknown_rate` 0.0427 — weak: R-10, E-19, E-30, T-12, T-29, T-34. The first attempt of this run reported the judge unavailable: `SPECCHECK_JUDGE_API_KEY` was empty in the environment (OpenRouter answered 401); it was re-run with the OpenRouter key.
+2. (`--judge-concurrency 16`, 8 min) 208/210, `unknown_rate` 0.0314 — weak: E-19, E-36. Between runs 1 and 2:
+   - **R-10** — `MDVMermaidPipeline.outcome(source:theme:)` is now the one function the view uses for a native block's outcome; `testUnsupportedTypesAndParseErrorsFallBack` asserts a parse failure yields "Mermaid diagram could not be rendered", renders `MermaidFallbackView` to a vector PDF, and asserts the message precedes the source and the source line is fixed-pitch (same-letter pitches constant within 0.2 pt; the message's vary by more than 1 pt).
+   - **T-34** — `testVendoredSwiftMathInventory` now runs `tools/check-swiftmath.sh` (`diff -r` against a fresh clone of upstream 1.7.3; needs the network) and asserts the changed set equals the README list and removals are confined to `mathFonts.bundle`.
+   - **T-12** — new `ChromeModelTests.testSystemThemeSwitchesLiveWithAppearance`: *System* chosen, the application appearance flipped aqua → darkAqua → aqua; `SystemAppearance` observes it, the session republishes, and its theme goes high-contrast → twilight → high-contrast; a named theme ignores it. `ThemeTests.testResolution` no longer cites T-12.
+   - **T-29** — new `SessionTests.testFileWatchScriptThroughSession`: T-29's script through a session on the real file system and watcher, counting reloads (`renderGeneration` steps) instead of watcher callbacks — five saves within 50 ms, `mv`, `rm` and re-create, invalid UTF-8, truncate-and-write-back; final content, kept position and no blank frame asserted.
+   - **E-30** — unchanged: speccheck hands the judge only an edge case's trigger column, and the test already asserts the outcome (no restorable windows, one window on relaunch following R-40); run 2 judged it `PASSING`.
+3. (`--judge-concurrency 16`) the line above. Between runs 2 and 3, **E-36** (`PASSING` in run 1; the judge again read only the trigger column) gained its missing clause — a surviving bookmark opens its file as an adding route after *Close All*.
+
+**E-19 stays weak, honestly.** Its outcome — "scroll position kept; the text selection is not preserved" — has a session half (`testReloadRules`: position kept, content swapped, `renderGeneration` stepped) and a view half no headless test reaches: SwiftUI's text selection. The article's blocks are identified by index, so a block whose text a reload leaves unchanged keeps its view identity; whether SwiftUI keeps a selection across that is **not verified** — it needs a person (select text, save the file from an editor, look). A test that "asserts" it without selecting text would be the self-certification this report must not contain, so the row is recorded, not papered over.
 
 ### 3.1 Re-gated with speccheck 1.8.0 (2026-09-18)
 
@@ -137,6 +184,8 @@ immediate re-run and on the final full run; K-15 is defined on an otherwise idle
 | Diagrams vs rows | Every §3.1 transition has a `SessionTests` case (`testDeleteRowTransitions`, `testReloadRules`, `testEmptyToViewingOnOpen`, `testRealFileWatcherCoalesces`, …); the mermaid state diagram introduced no transition the rows lack. |
 | Reference images / TYPOGRAPHY.md | §5 below; T-45/T-46 measured through the harness against the spec's own bands and centring rule (an oracle the build did not produce) |
 | README | Re-run before this report: `make`, `bin/mdv6 --version` → `1.0.0`, `swift test --parallel --xunit-output junit.xml`, both speccheck phases, `render-harness --check` (18 cases, exit 0), `render-harness --scan test-docs/mermaid` (15 records, exit 0), `bash tools/gate-w0.sh` (PASS ×all), `tools/idle-cpu.sh` (median 0.00 %, p95 0.00 %). `tools/check-swiftmath.sh` needs network and was run in W0. |
+| README (v0.14, `bce5111`) | Re-run as written: `make` + `codesign --verify --deep --strict` (0); `bin/mdv6 --version` → `1.0.0`; `echo '# hi' \| bin/mdv6 -` (0); `render-harness INPUT --output` (0); `--scan test-docs/mermaid` (10 `pass`, 5 `web`, exit 0); `--check test-docs/render-cases.json` (14 `pass`, 4 `web`, exit 0); `--print-pdf` on `math.md` (22 records, exit 0); `bash tools/gate-w0.sh` (all PASS); `swift test --parallel --xunit-output junit.xml` (234/0); both speccheck phases (§7). The digest `a43bc1af…d6ddb6f9e` quoted in Setup was recomputed from `Vendor/mermaid/mermaid.min.js`. |
+| v0.14 size | `cloc` over `mdv6/Core`, `App`, `tools/render-harness/Sources`, `tools/seed-store` (`.build`, vendored code excluded): **7,930 code lines / 66 files**; `Tests`: 4,060 lines / 31 files. W10–W15 made 2,418 line insertions and 87 deletions in `mdv6/Core` + `App` (`git diff --stat 8e0b200 HEAD`) |
 | Every wave closed | §1 |
 | No silent omissions | The Phase 0 checklist (R 42 / C 18 / I 15 / K 16 / E 30 / T 48 = 169 ids) is exactly the 169 `PASSING` rows of §6. No id was deferred. Optional behaviour is gated, not omitted (remote images behind `mdv6_load_remote_images`, smart typography behind `mdv6_smart_typography`). |
 
@@ -193,9 +242,23 @@ Run on the built bundle at `8e0b200`, isolated store (`MDV6_SUPPORT_DIR` / `MDV6
 
 The inline pass offsets every capture of the embedded grammar into the block (`CodeRenderer.apply`, C-05), so its arithmetic was checked against multi-byte input rather than assumed: `testMarkdownBlockAndInlineCaptures` colours `**böld**`, `` `cöde` `` and `[lïnk](…)` after a line of `Ünïcödé` text, which a byte-based offset would leave plain. The same probe was driven through the app on `/tmp/mdv6-md-utf8.md` (`build/observed/T-51-utf8.png`); the agent's own read of that capture was inconclusive — the vision helper timed out once and then reported the block as plain, which the deterministic assertion contradicts — so the assertion, not the picture, is the evidence for this clause.
 
+## 5d. The observed pass for W10–W15 (v0.14)
+
+Run on the built bundle at `731514c`, isolated store (`MDV6_SUPPORT_DIR` / `MDV6_DEFAULTS_SUITE`), driven by `tools/observe.sh` (the drive hook) and captured by the app's own snapshot hook. **Stand-in, stated:** the console was locked for the whole pass (`CGSSessionScreenIsLocked = 1`), so `screencapture`, `tools/click.swift` and synthetic wheel events (tried via `sendEvent` and `CGEvent.postToPid`, neither scrolled) were unavailable. The snapshot hook renders the window's content view, so it shows the document, not menus, sheets or panels. The agent looked at every capture listed; a person has not.
+
+| Test | What was driven | Outcome |
+| --- | --- | --- |
+| T-52 | `frontmatter.md` shown and hidden | `v014-frontmatter.png` — table above the heading, semibold keys, alternating fills, folded and literal values, nested list; matches `reference/ORIGINAL-FRONTMATTER.png` in structure. `v014-frontmatter-hidden.png` — the table gone, the body where it would be. TOML, `...`-closed and negative fixtures, bookmark and TOC stability asserted in `swift test` only |
+| T-53 (manual half) | ⌘P | **pending** — the print panel is not in the content view and the console was locked. The pipeline it runs was driven: the `--print-pdf` output of `math.md` was rasterised and looked at (`m-p1.png` in the session scratchpad): header, footer, vector math |
+| T-54 | `gantt.md` | `w13-gantt2.png`, `v014-gantt-before.png` — the gantt renders on the code-block background; matches `reference/ORIGINAL-GANTT.png` in structure. `v014-gantt-down.png` — ↓ scrolls past it. **Pending:** right-click menu, wheel over the diagram (`v014-gantt-wheel.png` shows no movement — the synthetic wheel did not reach the view), VoiceOver |
+| T-58 | `diff.md` | `v014-diff.png`, `w12-diff.png` — tints, italic `@@`, semibold headers, label top-leading after F-185; matches `reference/ORIGINAL-DIFF.png`. Phosphor's brightness split asserted in `swift test` |
+| T-59 | `raw-html-images.md`, remote images off | `v014-raw-html-images.png` — the sizes, the inline 120 pt image on its baseline, the block `alt` text, the empty inline parentheses, the remote placeholder; matches `reference/ORIGINAL-RAW-HTML-IMAGES.png` |
+| R-47 / R-49 / R-48 | Close All with two windows; End, Home, ⌃⇥, ⌘W | `v014-ca-after-mdv6.png` — both windows EMPTY after the confirmed Close All; `w12-end.png`, `w12-home.png`, `w12-ctrltab.png`, `w12-closed.png`. The Close All **sheet** itself is not in a snapshot |
+| R-01 | ⇧⌘W, then `open -g` a file | a window with the file was created; whether the app stayed in the background could not be judged (loginwindow frontmost) — **pending** |
+
 ## 6. Per-ID evidence (from `build/speccheck/speccheck.json`)
 
-175 ids: R 43, C 19, I 15, K 16, E 31, T 51 — all `PASSING` in Phase A (Phase B's pre-existing weak rows are §7). *Realised in* lists the `mdv6/Core` files citing the id (source citations do not count for T-nn); *verified by* the joined green tests.
+210 ids: R 51, C 22, I 18, K 19, E 38, T 62 — all `PASSING` in Phase A (the 35 v0.14 ids are the last rows of the table) (Phase B's pre-existing weak rows are §7). *Realised in* lists the `mdv6/Core` files citing the id (source citations do not count for T-nn); *verified by* the joined green tests.
 
 | ID | Status | Realised in | Verified by |
 |---|---|---|---|
@@ -374,22 +437,60 @@ The inline pass offsets every capture of the embedded grammar into the block (`C
 | T-50 | PASSING | ParsedDocument.swift, LineCitation.swift | `testBlockLinesAreHalfOpenAndCounted`, `testLineCitationGrammar`, `testRangeNormalisation`, `testResolution`, `testFixtureLineMap` (LineCitationTests) |
 | C-19 | PASSING | LineCitation.swift, DocumentSession.swift, ParsedDocument.swift | as T-49/T-50 |
 | E-31 | PASSING | LineCitation.swift (`lineCitationBlock`) | `testResolution`, `testFixtureLineMap` (LineCitationTests); `testLineCitationSameDocument`, `testLineCitationCrossFile` (SessionTests) |
+| R-44 | PASSING | ArticleView.swift, BookmarkTitle.swift, DocumentRenderer.swift, DocumentSession.swift, Frontmatter.swift, FrontmatterTableView.swift, ParsedDocument.swift, Preferences.swift, mdv6App.swift | `testFrontmatterTableAndHidden` (ArticleTests); `testFrontmatterPrints` (PrintTests); `testRecognitionOnFixtures` (FrontmatterTests); `testShowFrontmatterKey` (PersistenceTests); `testHiddenHeaderAnchorAndTitle` (SessionTests); `testFrontmatterIsBlockZero` (SplitTests) |
+| R-45 | PASSING | DocumentRootView.swift, DocumentSession.swift, ImageProviders.swift, PrintController.swift, mdv6App.swift | `testVectorText` (PrintTests); `testVectorFormulas` (PrintTests); `testNothingToPrint` (PrintTests) |
+| R-46 | PASSING | MDVMermaidDiagramView.swift, MermaidDispatch.swift, MermaidWebView.swift | `testWebPathChrome` (MermaidTests); `testGanttRendersOffscreen` (MermaidWebTests); `testMermaidScriptPinned` (BuildAndLauncherTests) |
+| R-47 | PASSING | AppModel.swift, DocumentRootView.swift, DocumentSession.swift, WindowAccessor.swift, mdv6App.swift | `testCloseFile` (SessionTests); `testCloseAllEmptiesEveryWindow` (SessionTests); `testTargetSessionAndZeroWindows` (SessionTests) |
+| R-48 | PASSING | DocumentRootView.swift, DocumentSession.swift, ScrollKeys.swift, WindowAccessor.swift, mdv6App.swift | `testScrollKeyOwnership` (ChromeModelTests); `testStepFile` (SessionTests); `testHistoryStep` (V014FormulaTests) |
+| R-49 | PASSING | DocumentRootView.swift, ScrollKeys.swift, WindowAccessor.swift | `testScrollKeyOwnership` (ChromeModelTests); `testScrollTargets` (V014FormulaTests); `testKeyMap` (V014FormulaTests) |
+| R-50 | PASSING | CodeRenderer.swift, DiffHighlighter.swift | `testDiffTint` (CodeRendererTests); `testGitDiffFromFixture` (DiffClassifyTests) |
+| R-51 | PASSING | RawHTMLImages.swift | `testRawHTMLImageSizes` (ArticleTests); `testRewriteAndRoundTrip` (RawHTMLImagesTests) |
+| C-20 | PASSING | ArticleView.swift, Frontmatter.swift, FrontmatterTableView.swift, ParsedDocument.swift | `testFrontmatterTableAndHidden` (ArticleTests); `testRecognitionOnFixtures` (FrontmatterTests); `testRecognitionRules` (FrontmatterTests); `testZeroRowCandidateIsNotAHeader` (FrontmatterTests); `testYAMLRows` (FrontmatterTests); `testYAMLScalarForms` (FrontmatterTests) … |
+| C-21 | PASSING | ArticleTheme.swift, FrontmatterTableView.swift, HarnessCases.swift, MDVMermaidPipeline.swift, MathImageCache.swift, MermaidWebView.swift, PDFImageScan.swift, PrintController.swift, PrintScale.swift | `testVectorText` (PrintTests); `testVectorFormulas` (PrintTests); `testPagination` (PrintTests); `testPrintedRhythm` (PrintTests); `testCodeWraps` (PrintTests); `testNativeDiagramsPrintAsVector` (PrintTests) … |
+| C-22 | PASSING | ArticleView.swift, ImageProviders.swift, MathViews.swift, RawHTMLImages.swift | `testRawHTMLImageSizes` (ArticleTests); `testInlineImages` (ArticleTests); `testInlineRemoteGated` (ImageLoadingTests); `testRewriteAndRoundTrip` (RawHTMLImagesTests); `testAttributeForms` (RawHTMLImagesTests); `testDisplaySize` (RawHTMLImagesTests) … |
+| I-016 | PASSING | ArticleView.swift, ImageProviders.swift | `testInventoryMatchesREADME` (VendorMarkdownUITests); `testResolvedInlineImageRendersUnderImageRenderer` (VendorMarkdownUITests) |
+| I-017 | PASSING | DocumentSession.swift, PrintController.swift | `testIndependentOfScreenState` (PrintTests) |
+| I-018 | PASSING | ArticleView.swift | `testFrontmatterTableAndHidden` (ArticleTests); `testFrontmatterIsBlockZero` (SplitTests) |
+| K-17 | PASSING | MermaidWebView.swift, PrintController.swift, PrintScale.swift | `testIndependentOfScreenState` (PrintTests); `testPrintScale` (V014FormulaTests) |
+| K-18 | PASSING | ScrollKeys.swift | `testScrollKeyOwnership` (ChromeModelTests); `testScrollTargets` (V014FormulaTests); `testKeyMap` (V014FormulaTests) |
+| K-19 | PASSING | MermaidWebView.swift | `testGanttRendersOffscreen` (MermaidWebTests); `testMermaidScriptPinned` (BuildAndLauncherTests) |
+| E-32 | PASSING | Frontmatter.swift | `testRecognitionOnFixtures` (FrontmatterTests); `testRecognitionRules` (FrontmatterTests); `testZeroRowCandidateIsNotAHeader` (FrontmatterTests) |
+| E-33 | PASSING | DocumentRootView.swift, DocumentSession.swift, PrintController.swift | `testNothingToPrint` (PrintTests) |
+| E-34 | PASSING | — | `testRejectedSourceFails` (MermaidWebTests); `testNothingLeavesThePage` (MermaidWebTests) |
+| E-35 | PASSING | RawHTMLImages.swift | `testLiteralCases` (RawHTMLImagesTests) |
+| E-36 | PASSING | AppModel.swift, DocumentRootView.swift, DocumentSession.swift | `testCloseAllEmptiesEveryWindow` (SessionTests) |
+| E-37 | PASSING | ScrollKeys.swift | `testScrollKeyOwnership` (ChromeModelTests) |
+| E-38 | PASSING | AppModel.swift, WindowAccessor.swift, mdv6App.swift | `testTargetSessionAndZeroWindows` (SessionTests); `testWindowOnDemandOnlyWithAFile` (SessionTests) |
+| T-52 | PASSING | — | `testFrontmatterTableAndHidden` (ArticleTests); `testFindTypographyAndVerbatimHeader` (ArticleTests); `testRecognitionOnFixtures` (FrontmatterTests); `testHiddenHeaderAnchorAndTitle` (SessionTests); `testFrontmatterIsBlockZero` (SplitTests); `testLineCitationIntoHeaderResolvesToBlockZero` (SplitTests) |
+| T-53 | PASSING | HarnessCases.swift, PrintController.swift | `testVectorText` (PrintTests); `testVectorFormulas` (PrintTests); `testPagination` (PrintTests); `testPrintedRhythm` (PrintTests); `testCodeWraps` (PrintTests); `testNativeDiagramsPrintAsVector` (PrintTests) … |
+| T-54 | PASSING | — | `testWebPathChrome` (MermaidTests); `testGanttRendersOffscreen` (MermaidWebTests); `testMermaidScriptPinned` (BuildAndLauncherTests); `testDispatch` (MermaidDispatchTests) |
+| T-55 | PASSING | — | `testCloseFile` (SessionTests); `testCloseAllEmptiesEveryWindow` (SessionTests) |
+| T-56 | PASSING | — | `testStepFile` (SessionTests); `testHistoryStep` (V014FormulaTests) |
+| T-57 | PASSING | — | `testScrollKeyOwnership` (ChromeModelTests); `testScrollTargets` (V014FormulaTests) |
+| T-58 | PASSING | — | `testDiffTint` (CodeRendererTests); `testGitDiffFromFixture` (DiffClassifyTests) |
+| T-59 | PASSING | — | `testRawHTMLImageSizes` (ArticleTests); `testInlineImages` (ArticleTests); `testInlineRemoteGated` (ImageLoadingTests); `testRewriteAndRoundTrip` (RawHTMLImagesTests) |
+| T-60 | PASSING | DocumentRenderer.swift, WindowAccessor.swift | `testFindTypographyAndVerbatimHeader` (ArticleTests) |
+| T-61 | PASSING | — | `testTargetSessionAndZeroWindows` (SessionTests) |
+| T-62 | PASSING | — | `testInventoryMatchesREADME` (VendorMarkdownUITests) |
 
 ## 7. Verdict
 
 ```text
-Spec coverage: 175/175 IDs realized (0 deferred)
-speccheck (mock): speccheck: CONFORMING - 175/175 passing (100.0%), 0 failing, 0 skipped, 0 weak, 0 unverified, 0 untested, 0 uncited; 0 dangling, 0 stale; judge=mock
-speccheck (llm):  speccheck: NOT CONFORMING - 170/175 passing (97.1%), 0 failing, 0 skipped, 5 weak, 0 unverified, 0 untested, 0 uncited; 0 dangling, 0 stale; judge=llm (deepseek/deepseek-v4.1-flash via OpenRouter, unknown_rate 0.2557 > max_unknown 0.2000) — the 5 weak rows are R-10, E-16, E-19, E-22, T-27, all pre-existing manual/edge tests, none of them a W9 id (R-43, C-05, K-05 and T-51 are PASSING, and T-51 is joined to testAddedLanguagesCaptureClasses + testMarkdownBlockAndInlineCaptures); the same class was already NOT CONFORMING before W9 (169/175, 6 weak, unknown_rate 0.2316 on the pre-markdown tree) and the judge's weak set drifts between runs (R-10, E-19, T-27 recur in both), so the delta is judge variance and endpoint, not this change
-Observed: T-44 build/observed/T-44-sevilla.png (+charcoal, twilight, states; user-report/search-hidden-by-esc.png, hover-chevron.png) — anatomy matches reference/MDV-ORIGINAL-SEVILLA.png; Esc-hide and hover chevron exercised with real input; agent looked, person's look pending
-          T-45 measured (testRhythmBandSevillaAndCharcoal, spec bands) — pass;  T-46 measured (centred, .display height) — pass
-          T-47 build/observed/T-47-first.png, T-47-second-window.png, T-47-empty-title.png — titles follow each window's file, revert to mdv6; person's look pending
-          T-48 build/observed/T-48-stripe-*.png, T-48-third-moved-up.png, …, user-report/bookmark-context-menu.png — stripe, reorder, menu presentation and a real drag reorder exercised; menus also proved in swift test; person's look pending
-          T-49 build/observed/w8-before.png, w8-after-click.png (a real pointer click on the citation), w8-after-citation.png (cross-file: file loaded, scrolled, tinted) — flash seen live; flash target, expiry and the E-31 clamp asserted in swift test, see §5b for what was and was not captured
-          T-51 build/observed/T-51-code-{start,cpp,json,lua-perl,markdown}.png + T-51-utf8.png — the seven languages coloured in the app; the user looked at the running app and confirmed (§5c); the capture classes and the non-ASCII offset case are asserted in swift test
-          T-43 PENDING: no Developer ID identity, notary profile or vX.Y.Z tag on this host (tag gate and chain dry-run proved)
+Spec coverage: 210/210 IDs realized (0 deferred)
+speccheck (mock): speccheck: CONFORMING - 210/210 passing (100.0%), 0 failing, 0 skipped, 0 weak, 0 unverified, 0 untested, 0 uncited; 0 dangling, 0 stale; judge=mock
+speccheck (llm):  speccheck: NOT CONFORMING - 209/210 passing (99.5%), 0 failing, 0 skipped, 1 weak, 0 unverified, 0 untested, 0 uncited; 0 dangling, 0 stale; judge=llm (openai/gpt-6-luna-pro via OpenRouter, --judge-concurrency 16, unknown_rate 0.033) — the weak row is E-19, whose selection clause needs a person (§3.0)
+Tests: 236, 0 failures (swift test --parallel); swift build 0 warnings
+Observed (v0.14, §5d — agent's look at snapshot-hook captures; console locked, no person's look yet):
+          T-52 v014-frontmatter.png, v014-frontmatter-hidden.png — matches ORIGINAL-FRONTMATTER.png in structure
+          T-53 manual half PENDING (print panel); the pipeline's PDF looked at (m-p1.png)
+          T-54 w13-gantt2.png, v014-gantt-*.png — renders; right-click menu, wheel, VoiceOver PENDING
+          T-58 v014-diff.png, w12-diff.png — matches ORIGINAL-DIFF.png after F-185
+          T-59 v014-raw-html-images.png — matches ORIGINAL-RAW-HTML-IMAGES.png
+          R-01 open -g activation PENDING; E-19 selection-after-reload PENDING (person)
+Earlier observed set (§5–§5c): T-44, T-47, T-48, T-49 driven with real input, person's look pending; T-51 looked at by the user
+T-43 PENDING: no Developer ID identity, notary profile or vX.Y.Z tag on this host
 Readiness: BUILT
 Conformance: VERIFICATION PENDING
 ```
 
-The build is complete and mechanically conforming; the verdict becomes PASS when a person has looked at the T-44/T-47/T-48 captures (or the running app) — the T-51 captures have had that look — and PASS WITH NOTES until T-43's credentialed run is done on a tagged release checkout.
+The build is complete and mechanically conforming (Phase A). It becomes PASS when a person has, on an unlocked console: opened the v0.14 fixtures against the §9.7 references (T-52, T-54, T-58, T-59); printed from the panel and saved a PDF (T-53, R-45); right-clicked, wheeled over and VoiceOver-read a gantt chart (R-46); checked that `open -g` leaves mdv6 in the background (R-01); selected text, saved the file from an editor and seen the selection dropped (E-19); and looked at the T-44/T-47/T-48 captures. It stays PASS WITH NOTES until T-43's credentialed run is done on a tagged release checkout.
