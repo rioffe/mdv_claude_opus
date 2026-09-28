@@ -8,7 +8,7 @@ swift test --parallel --xunit-output junit.xml || { echo "swift test failed"; ex
 speccheck check --spec SPEC.md --src mdv6/Core --tests Tests --results junit.xml --judge mock --strict --out build/speccheck
 A=$?
 if [ -n "${SPECCHECK_JUDGE_URL:-}" ]; then
-  speccheck check --spec SPEC.md --src mdv6/Core --tests Tests --results junit.xml --judge llm --strict --out build/speccheck-llm
+  speccheck check --spec SPEC.md --src mdv6/Core --tests Tests --results junit.xml --judge llm --judge-concurrency 16 --strict --out build/speccheck-llm
   B=$?
 else
   echo "Phase B not run: SPECCHECK_JUDGE_URL unset"; B=0
