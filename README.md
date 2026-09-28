@@ -1,6 +1,6 @@
-# mdv6
+<img src="MDV6.png" width="320" alt="mdv6">
 
-<img src="MDV6.png" width="480" alt="mdv6">
+# mdv6
 
 A native macOS viewer for Markdown that renders a `.md` file the way a good document viewer renders a PDF — GitHub-flavoured Markdown with frontmatter tables, tree-sitter code highlighting and diff tinting, native Mermaid diagrams and LaTeX math, raw `<img>` tags, printing, with history, full-text search, bookmarks and back/forward — and never edits the file. Built from scratch against [`SPEC.md`](SPEC.md) (v0.14.8) and [`TYPOGRAPHY.md`](TYPOGRAPHY.md). Developed with the [speccheck](https://github.com/rioffe/speccheck/) methodology — from a written specification, reviewed and proved, then implemented and verified against it; see the tool and [Introducing speccheck: From Vibe Coding to Specification Engineering](https://rioffe.github.io/speccheck/introducing-speccheck.html). Every pixel is drawn by AppKit/SwiftUI/CoreText with one bounded exception — Mermaid types the native renderer lacks (gantt, pie, timeline, …) are drawn by a bundled, hash-pinned mermaid.js in a web view that loads nothing else — and anything a renderer cannot handle is shown as its source, never as a blank.
 
