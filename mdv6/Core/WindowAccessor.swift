@@ -83,14 +83,17 @@ public struct WindowAccessor: NSViewRepresentable {
         func installDriveHook(window: NSWindow, session: DocumentSession) {
             guard let dir = ProcessInfo.processInfo.environment["MDV6_SNAPSHOT_DIR"], !dir.isEmpty else { return }
             driveObserver = DistributedNotificationCenter.default().addObserver(forName: Notification.Name("mdv6.drive"), object: nil, queue: .main) { note in
-                guard session.model.targetWindow === window else { return }       // one window acts (R-01's target)
                 if let raw = note.userInfo?["command"] as? String, let command = AppCommand(rawValue: raw) {
-                    Task { @MainActor in CommandCenter.post(command, window: window) }
+                    Task { @MainActor in
+                        guard session.model.targetWindow === window else { return }       // one window acts (R-01's target)
+                        CommandCenter.post(command, window: window)
+                    }
                     return
                 }
                 guard let action = note.userInfo?["action"] as? String else { return }
                 let index = Int((note.userInfo?["index"] as? String) ?? "") ?? 0
                 Task { @MainActor in
+                    guard session.model.targetWindow === window else { return }           // one window acts (R-01's target)
                     let bookmarks = session.model.bookmarks
                     switch action {
                     case "selectTOC": session.selectTOC(blockIndex: index)
