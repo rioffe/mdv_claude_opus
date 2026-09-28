@@ -218,7 +218,7 @@ public struct MermaidWebContainer: View {
     public var body: some View {
         Group {
             if failed || MermaidWebPage.script == nil {
-                MermaidFallbackView(message: "Mermaid diagram could not be rendered", source: source, theme: theme)
+                MermaidFallbackView(message: MDVMermaidPipeline.fallbackMessage, source: source, theme: theme)
             } else {
                 MermaidWebDiagram(source: source, theme: theme, menuItems: menuItems) { result in
                     switch result {

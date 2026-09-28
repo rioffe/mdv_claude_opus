@@ -196,6 +196,40 @@ final class ChromeModelTests: XCTestCase {
         XCTAssertEqual(sys.isDark, SystemAppearance.isDark(NSApplication.shared.effectiveAppearance))
     }
 
+    /// T-12, R-29: with *System* chosen, toggling the macOS appearance switches the article's theme live — `SystemAppearance`
+    /// observes the application's effective appearance, the window forwards it to the session (as `DocumentRootView` does),
+    /// and the session's theme goes high-contrast → twilight → high-contrast, republishing each time; a named theme ignores it.
+    func testSystemThemeSwitchesLiveWithAppearance() {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("mdv6-t12-\(UUID().uuidString)")
+        let suite = "mdv6.t12.\(UUID().uuidString)"
+        let saved = NSApplication.shared.appearance
+        defer { NSApplication.shared.appearance = saved; UserDefaults.standard.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: dir) }
+        let model = AppModel.bootstrap(supportDir: dir, defaultsSuite: suite, fileSystem: .fake(files: [:], mtime: 1))
+        let session = DocumentSession(model: model, watcherFactory: { _, _ in NoWatch() }, pasteboard: { _ in }, systemOpener: { _ in }, beeper: {})
+        model.preferences.themeId = ThemeCatalog.systemId
+        let system = SystemAppearance(application: NSApplication.shared)
+        let forward = system.$isDark.sink { session.isDarkAppearance = $0 }
+        var published = 0
+        let watch = session.objectWillChange.sink { published += 1 }
+        defer { forward.cancel(); watch.cancel() }
+        func settle(until dark: Bool) {
+            let deadline = Date(timeIntervalSinceNow: 2)
+            while system.isDark != dark, Date() < deadline { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02)) }
+        }
+        NSApplication.shared.appearance = NSAppearance(named: .aqua); settle(until: false)
+        XCTAssertEqual(session.theme.id, "high-contrast")
+        published = 0
+        NSApplication.shared.appearance = NSAppearance(named: .darkAqua); settle(until: true)
+        XCTAssertTrue(system.isDark)
+        XCTAssertEqual(session.theme.id, "twilight", "System follows Dark live")
+        XCTAssertGreaterThan(published, 0, "the session republishes, so the article redraws")
+        NSApplication.shared.appearance = NSAppearance(named: .aqua); settle(until: false)
+        XCTAssertEqual(session.theme.id, "high-contrast", "and back to Light")
+        model.preferences.themeId = "sevilla"
+        NSApplication.shared.appearance = NSAppearance(named: .darkAqua); settle(until: true)
+        XCTAssertEqual(session.theme.id, "sevilla", "a named theme ignores the appearance")
+    }
+
     final class NoWatch: FileWatching { func cancel() {} }
 
     /// R-49, E-37, K-18: the document takes a scroll key only with no ⌘/⌥/⌃ and when the first responder is nothing, the

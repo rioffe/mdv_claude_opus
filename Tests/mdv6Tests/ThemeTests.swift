@@ -16,7 +16,7 @@ final class ThemeTests: XCTestCase {
     }
 
     /// R-29, C-04: `system` resolves to `high-contrast` in Light and `twilight` in Dark; an unknown id resolves to
-    /// `high-contrast`. T-12, T-42.
+    /// `high-contrast`. T-42.
     func testResolution() {
         XCTAssertEqual(ThemeCatalog.resolve(id: "system", isDarkAppearance: false).id, "high-contrast")
         XCTAssertEqual(ThemeCatalog.resolve(id: "system", isDarkAppearance: true).id, "twilight")

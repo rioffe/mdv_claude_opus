@@ -1,5 +1,7 @@
 import XCTest
 import AppKit
+import PDFKit
+import SwiftUI
 import BeautifulMermaid
 @testable import mdv6Core
 
@@ -36,8 +38,11 @@ final class MermaidTests: XCTestCase {
     }
 
     /// T-13, E-02, R-10, R-36, I-002, C-14: the unsupported types and any parse error throw so the view shows the fallback in
-    /// place (never modally); nothing crashes.
-    func testUnsupportedTypesAndParseErrorsFallBack() {
+    /// place (never modally); nothing crashes. R-10's fallback is asserted as drawn: the block's outcome is the fallback
+    /// message, and the fallback view's own PDF carries "Mermaid diagram could not be rendered" followed by the source, the
+    /// source set in a fixed-pitch face.
+    @MainActor
+    func testUnsupportedTypesAndParseErrorsFallBack() throws {
         for src in ["timeline\n  title X\n  2020 : a", "gantt\n  title G", "pie\n  \"a\" : 1", "mindmap\n  root", "gitGraph\n  commit",
                     "journey\n  title J", "quadrantChart\n  title Q"] {
             XCTAssertThrowsError(try prepare(src), src) { error in
@@ -48,6 +53,40 @@ final class MermaidTests: XCTestCase {
             guard case MermaidPrepareError.parse = error else { return XCTFail("\(error)") }
         }
         XCTAssertTrue(MDVMermaidPipeline.unsupportedTypes.isSuperset(of: ["timeline", "gantt", "pie", "mindmap", "gitgraph"]))   // lower-cased first word
+
+        let broken = "this is not mermaid at all ]]]"
+        guard case .fallback(let message) = MDVMermaidPipeline.outcome(source: broken, theme: .zincLight) else { return XCTFail("a parse error must fall back") }
+        XCTAssertEqual(message, "Mermaid diagram could not be rendered")
+        guard case .prepared = MDVMermaidPipeline.outcome(source: "flowchart LR\n  A --> B", theme: .zincLight) else { return XCTFail("a valid source must prepare") }
+        let (doc, _, _) = try XCTUnwrap(PrintController.pdf(of: MermaidFallbackView(message: message, source: broken, theme: .highContrast), width: 600))
+        let data = NSMutableData()
+        let consumer = try XCTUnwrap(CGDataConsumer(data: data as CFMutableData))
+        let cgPage = try XCTUnwrap(doc.page(at: 1)); var box = cgPage.getBoxRect(.mediaBox)
+        let ctx = try XCTUnwrap(CGContext(consumer: consumer, mediaBox: &box, nil))
+        ctx.beginPDFPage(nil); ctx.drawPDFPage(cgPage); ctx.endPDFPage(); ctx.closePDF()
+        let pdf = try XCTUnwrap(PDFDocument(data: data as Data))
+        let text = try XCTUnwrap(pdf.string)
+        let messageAt = try XCTUnwrap(text.range(of: "Mermaid diagram could not be rendered"), "pdf text: \(text.debugDescription)")
+        let sourceAt = try XCTUnwrap(text.range(of: "this is not mermaid at all ]]]"), "the source is shown: \(text)")
+        XCTAssertLessThan(messageAt.lowerBound, sourceAt.lowerBound, "message above the source")
+        // fixed pitch, measured on the page: between two occurrences of the same letter at least three characters apart, the distance per character is one
+        // constant in the source line (a monospaced face) and varies in the message line (a proportional one)
+        let page = try XCTUnwrap(pdf.page(at: 0))
+        func pitches(_ line: Range<String.Index>) -> [CGFloat] {
+            let start = text.distance(from: text.startIndex, to: line.lowerBound)
+            let chars = Array(text[line])
+            var out: [CGFloat] = []
+            for a in chars.indices where chars[a].isLetter {
+                for b in chars.indices where b >= a + 3 && chars[b] == chars[a] {           // spans of ≥ 3 characters average out ink offsets
+                    out.append((page.characterBounds(at: start + b).minX - page.characterBounds(at: start + a).minX) / CGFloat(b - a))
+                }
+            }
+            return out
+        }
+        let mono = pitches(sourceAt), prose = pitches(messageAt)
+        XCTAssertGreaterThan(mono.count, 5)
+        XCTAssertLessThan(mono.max()! - mono.min()!, 0.2, "the source is set in a monospaced face: \(mono)")
+        XCTAssertGreaterThan(prose.max()! - prose.min()!, 1, "the message is set in a proportional face: \(prose)")
     }
 
     /// R-41, K-14, E-28: a source over 1 MiB is rejected before the parser; one at the ceiling is parsed. T-41.

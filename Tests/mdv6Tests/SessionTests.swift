@@ -548,7 +548,64 @@ final class SessionTests: XCTestCase {
         XCTAssertEqual(s.topVisibleBlock, 1, "position clamped to the new block count")
     }
 
-    /// R-05, K-06, T-29 (real watcher): five writes within 50 ms yield at most two reloads; an atomic rename reloads.
+    /// T-29, R-05, K-06, E-21 — the whole script through a session on the real file system and the real watcher, counting
+    /// **reloads** (content swaps: `renderGeneration` steps) rather than watcher callbacks: five saves within 50 ms → at most
+    /// two reloads, the final content shown, the scroll position kept; `mv tmp file` reloads; `rm` keeps the content with no
+    /// error and re-creating reloads; invalid UTF-8 keeps the content and valid content reloads; a truncate-then-write-back
+    /// never shows an empty document.
+    func testFileWatchScriptThroughSession() throws {
+        let realDir = dir.appendingPathComponent("t29"); try FileManager.default.createDirectory(at: realDir, withIntermediateDirectories: true)
+        let realModel = AppModel.bootstrap(supportDir: dir.appendingPathComponent("support"), defaultsSuite: suite + ".t29")
+        defer { UserDefaults.standard.removePersistentDomain(forName: suite + ".t29") }
+        let s = DocumentSession(model: realModel, pasteboard: { _ in }, systemOpener: { _ in }, beeper: { self.beeps += 1 })
+        let file = realDir.appendingPathComponent("doc.md")
+        func body(_ second: String) -> String { "# A\n\n\(second)\n\nb\n\nc\n\nd" }
+        func pump(_ seconds: TimeInterval) { RunLoop.main.run(until: Date(timeIntervalSinceNow: seconds)) }
+        try body("start").write(to: file, atomically: true, encoding: .utf8)
+        s.open(file, route: .adding)
+        XCTAssertEqual(s.document?.blocks[1], "start")
+        s.topVisibleBlock = 2
+        pump(0.6)
+        var reloads = 0
+        let counter = s.$renderGeneration.dropFirst().sink { _ in reloads += 1 }
+        defer { counter.cancel() }
+
+        let burstStart = Date()
+        for i in 0..<5 { try body("save \(i)").write(to: file, atomically: false, encoding: .utf8); usleep(1_000) }
+        let burst = Date().timeIntervalSince(burstStart)
+        pump(1.2)                                                                    // latency + the 500 ms empty-read retry
+        let allowed = 1 + Int((burst / FileWatcher.latency).rounded(.up))          // a loaded host stretches the burst
+        XCTAssertGreaterThanOrEqual(reloads, 1)
+        XCTAssertLessThanOrEqual(reloads, max(2, allowed), "burst took \(burst) s")
+        XCTAssertEqual(s.document?.blocks[1], "save 4", "the final content is displayed")
+        XCTAssertEqual(s.topVisibleBlock, 2, "scroll position kept")
+
+        reloads = 0
+        let tmp = realDir.appendingPathComponent("tmp.md")
+        try body("renamed").write(to: tmp, atomically: false, encoding: .utf8)
+        XCTAssertEqual(rename(tmp.path, file.path), 0)                              // `mv tmp file`
+        pump(0.8)
+        XCTAssertGreaterThanOrEqual(reloads, 1); XCTAssertEqual(s.document?.blocks[1], "renamed")
+
+        try FileManager.default.removeItem(at: file); pump(0.8)                    // `rm file`
+        XCTAssertEqual(s.document?.blocks[1], "renamed", "content stays"); XCTAssertEqual(s.state, .viewing); XCTAssertEqual(beeps, 0)
+        try body("recreated").write(to: file, atomically: false, encoding: .utf8); pump(0.8)
+        XCTAssertEqual(s.document?.blocks[1], "recreated")
+
+        try Data([0x23, 0x20, 0xFF, 0xFE, 0x0A]).write(to: file); pump(0.8)          // invalid UTF-8
+        XCTAssertEqual(s.document?.blocks[1], "recreated", "undecodable content is ignored")
+        try body("valid again").write(to: file, atomically: false, encoding: .utf8); pump(0.8)
+        XCTAssertEqual(s.document?.blocks[1], "valid again")
+
+        let emptied = s.$document.dropFirst().sink { XCTAssertNotEqual($0?.blocks ?? [], [], "no blank frame") }
+        defer { emptied.cancel() }
+        try Data().write(to: file); pump(0.1)                                       // truncate, then write back within 500 ms
+        try body("written back").write(to: file, atomically: false, encoding: .utf8); pump(1.0)
+        XCTAssertEqual(s.document?.blocks[1], "written back")
+        XCTAssertEqual(s.topVisibleBlock, 2)
+    }
+
+    /// R-05, K-06 (real watcher): five writes within 50 ms yield at most two watcher deliveries; an atomic rename delivers.
     func testRealFileWatcherCoalesces() throws {
         let file = dir.appendingPathComponent("watched.md")
         try "one".write(to: file, atomically: true, encoding: .utf8)
@@ -800,7 +857,8 @@ final class SessionTests: XCTestCase {
     }
 
     /// R-47, E-36, E-26: *Close All* acts in every window — history, index and scroll positions cleared, bookmarks kept,
-    /// every session's stacks emptied and every session `EMPTY`, a pending zero-byte re-read cancelled. T-55.
+    /// every session's stacks emptied and every session `EMPTY`, a pending zero-byte re-read cancelled so no route re-adds a
+    /// row after the clear, and a surviving bookmark still opens its file as an adding route. T-55.
     func testCloseAllEmptiesEveryWindow() {
         let a = session(), b = session()
         let wa = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
@@ -820,6 +878,9 @@ final class SessionTests: XCTestCase {
         clock.advance(1)                                                            // the cancelled re-read must not fire
         XCTAssertEqual(b.state, .empty)
         XCTAssertEqual(model.history.entries, [])
+        a.openBookmark(model.bookmarks.bookmarks[0])                                // bookmarks still open their files (adding route)
+        XCTAssertEqual(a.state, .viewing); XCTAssertEqual(a.currentEntry?.path, "/d/b.md")
+        XCTAssertEqual(model.history.entries.map(\.path), ["/d/b.md"])
     }
 
     /// R-48: Next / Previous File step the history list as a selecting route (order unchanged, no re-index), push a

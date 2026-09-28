@@ -74,11 +74,7 @@ public struct MDVMermaidDiagramView: View {
         let key = MermaidCaches.LayoutKey(source: source, themeId: themeKey)
         if let cached = MermaidCaches.shared.layout(key) { outcome = .prepared(cached); onOutcome?(.prepared(cached)); return }
         let src = source, theme = MDVMermaidPipeline.theme(for: style, document: documentTheme)
-        let result: MermaidOutcome = await Task.detached(priority: .userInitiated) {
-            do { return .prepared(try MDVMermaidPipeline.prepare(source: src, theme: theme)) }
-            catch MermaidPrepareError.exceedsLimit { return .fallback(message: ContentLimits.exceededMessage) }        // E-28
-            catch { return .fallback(message: "Mermaid diagram could not be rendered") }                                // E-02
-        }.value
+        let result: MermaidOutcome = await Task.detached(priority: .userInitiated) { MDVMermaidPipeline.outcome(source: src, theme: theme) }.value
         if Task.isCancelled { return }                                                                                // E-25
         if case .prepared(let p) = result { MermaidCaches.shared.store(p, for: key) }
         outcome = result

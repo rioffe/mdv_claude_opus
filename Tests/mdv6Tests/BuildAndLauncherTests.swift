@@ -174,7 +174,9 @@ final class BuildAndLauncherTests: XCTestCase {
     }
 
     /// T-34, I-011: the vendored SwiftMath carries exactly the README-listed patches — the patch markers appear only in the
-    /// listed files and the font bundle is trimmed to Latin Modern Math (the full upstream diff is `tools/check-swiftmath.sh`).
+    /// listed files and the font bundle is trimmed to Latin Modern Math — and `diff -r` against upstream 1.7.3 (cloned by
+    /// `tools/check-swiftmath.sh`, which needs the network) changes exactly the README-listed files, adds none, and removes
+    /// only from `mathFonts.bundle`.
     func testVendoredSwiftMathInventory() throws {
         let vendor = Self.root.appendingPathComponent("Vendor/SwiftMath/Sources/SwiftMath")
         let readme = try String(contentsOf: Self.root.appendingPathComponent("Vendor/SwiftMath/README.md"), encoding: .utf8)
@@ -189,6 +191,15 @@ final class BuildAndLauncherTests: XCTestCase {
         let bundle = try FileManager.default.contentsOfDirectory(atPath: vendor.appendingPathComponent("mathFonts.bundle").path).sorted()
         XCTAssertEqual(bundle, ["GUST-FONT-LICENSE.txt", "LICENSE", "OFL.txt", "latinmodern-math.otf", "latinmodern-math.plist"])
         XCTAssertTrue(readme.contains("fa8244ed032f4a1ade4cb0571bf87d2f1a9fd2d7"))
+
+        let diff = run("/bin/bash", ["tools/check-swiftmath.sh"])
+        XCTAssertEqual(diff.status, 0, diff.out + diff.err)
+        let out = diff.out.components(separatedBy: "\n")
+        let changed = out.drop { $0 != "changed files:" }.dropFirst().prefix { !$0.hasPrefix("removed from") }.filter { !$0.isEmpty }
+        XCTAssertEqual(Set(changed), Set(listed), "the upstream diff changes exactly the README-listed files")
+        let removed = out.drop { !$0.hasPrefix("removed from") }.dropFirst().prefix { !$0.hasPrefix("check-swiftmath") }.filter { !$0.isEmpty }
+        XCTAssertFalse(removed.isEmpty); XCTAssertTrue(removed.allSatisfy { $0.hasPrefix("mathFonts.bundle/") }, "\(removed)")
+        XCTAssertTrue(diff.out.contains("check-swiftmath: OK"))
     }
 
     /// C-13, K-19, R-34, R-46 (T-54 build clause): the pinned mermaid.js is verified by SHA-256; a corrupted copy fails

@@ -431,3 +431,15 @@ public final class MermaidCaches {
     public var layoutCount: Int { lock.lock(); defer { lock.unlock() }; return layouts.count }
     public var rasterCount: Int { lock.lock(); defer { lock.unlock() }; return rasters.count }
 }
+
+public extension MDVMermaidPipeline {
+    /// R-10 / E-02: the message a diagram that fails on its path shows above its source.
+    static let fallbackMessage = "Mermaid diagram could not be rendered"
+
+    /// R-10 / E-02 / E-28: what a natively dispatched block shows — the prepared diagram, or the fallback message.
+    static func outcome(source: String, theme: DiagramTheme) -> MermaidOutcome {
+        do { return .prepared(try prepare(source: source, theme: theme)) }
+        catch MermaidPrepareError.exceedsLimit { return .fallback(message: ContentLimits.exceededMessage) }            // E-28
+        catch { return .fallback(message: fallbackMessage) }                                                           // E-02
+    }
+}
