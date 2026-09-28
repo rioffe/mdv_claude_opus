@@ -3,7 +3,7 @@
 # when SPECCHECK_JUDGE_URL is set, Phase B (LLM judge). Both must exit 0 for the build to be CONFORMING.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$ROOT"
+cd "$ROOT" || exit
 swift test --parallel --xunit-output junit.xml || { echo "swift test failed"; exit 1; }
 speccheck check --spec SPEC.md --src mdv6/Core --tests Tests --results junit.xml --judge mock --strict --out build/speccheck
 A=$?
