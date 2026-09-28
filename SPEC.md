@@ -1,6 +1,6 @@
 # SPECIFICATION — mdv6 (Markdown viewer, native macOS GUI + CLI launcher, Swift/SwiftUI)
 
-> - **Status:** v0.14.7 (2026-09-27). The original's post-v0.7 features — frontmatter, printing, Mermaid types rendered by a bundled mermaid.js, Close File / Window / All, Next / Previous File, keyboard scrolling, diff tinting, raw `<img>` tags (R-44…R-51) — are specified and reviewed twice (F-149…F-181 applied), and are *not yet realised* in this tree, as are C-19, E-31, T-49 and T-50; every other row is realised and verified. Changes per version, with their findings, are in the *Revision history* at the end. A plain §11 row is realised and verified; *not yet realised* marks specified work with no implementation; **open defect** marks known implemented behaviour that violates the normative row; *verification pending* marks a revised implemented path whose conformance has not yet been observed. Rows are never weakened to hide a defect.
+> - **Status:** v0.14.8 (2026-09-27). Every row is realised in this tree: the original's post-v0.7 features (R-44…R-51) by the W10–W15 build, line citations (C-19) by W8; three rows carry *verification pending* for clauses only a person at an unlocked console can observe (§11). Changes per version, with their findings, are in the *Revision history* at the end. A plain §11 row is realised and verified; *not yet realised* marks specified work with no implementation; **open defect** marks known implemented behaviour that violates the normative row; *verification pending* marks a revised implemented path whose conformance has not yet been observed. Rows are never weakened to hide a defect.
 > - **Language / stack:** Swift 5.9 (SwiftPM, no Xcode project) | SwiftUI + AppKit | MarkdownUI 2.4.1 (cmark-gfm) · SwiftTreeSitter 0.25.0 (manifest floor 0.8.0) + eighteen vendored tree-sitter grammars · beautiful-mermaid-swift 1.0.4 (ELK layout) · SwiftMath 1.7.3 (vendored, patched) · MarkdownUI 2.4.1 vendored with one patch (I-016) · mermaid.js 11.4.1 in WebKit (`WKWebView`) for the diagram types the native library lacks (R-46) · SQLite (FTS5) | surfaces: macOS app bundle, `bin/mdv6` shell launcher, `make` targets
 > - **Sources:** the original application, [tqbf/mdv](https://github.com/tqbf/mdv) — its README and Help (user-facing behaviour), its NOTES (library gaps and their work-arounds), `TYPOGRAPHY.md` (theme conventions, carried into this repository), its code-block design notes, its vendored-SwiftMath README, its implementation, launcher, build script, Makefile, package manifest and CI workflow, and its git history through the v0.7 commit — and, for v0.14, through `68aa008` (its `Frontmatter.swift`, `FrontmatterView.swift`, `PrintController.swift`, `MermaidWebRenderer.swift`, `RawHTMLImages.swift`, `ScrollKeyMonitor.swift`, `DiffHighlighter.swift`, `Vendor/MarkdownUI/README.md`, the Help and README of that commit, and its `test-docs/` fixtures for those features); `SPEC_REVIEW_REPORT.md` (the sixth review, F-114..F-125; the five earlier reviews, F-001..F-093, were applied through v0.8 and are not carried); `reference/MDV-SCREEN.png` and `reference/MDV-ORIGINAL-SEVILLA.png` (the original application, normative for chrome structure — C-18); `reference/RECREATION-MDV6-SEVILLA.png` and `reference/RECREATION-MDV7-SEVILLA.png` (the two v0.8 recreations, shown as the gaps T-44..T-47 close). This repository is a from-scratch rebuild against this specification; none of the original's source is used.
 > - **Scope of this document:** the observable behaviour of the mdv6 application and its launcher — file opening and closing, rendering (Markdown, frontmatter, code, diffs, Mermaid, LaTeX, `<img>` tags), printing, navigation, find and search, history, bookmarks, persistence, theming, packaging and release. It does **not** specify the internals of the third-party renderers beyond the contracts mdv6 relies on, nor the colour and type values of individual themes (those live in `TYPOGRAPHY.md`). Since v0.9 it **does** specify the structure of the window chrome — title, toolbar, sidebar rows, inspector rows, badges and active states — because the v0.8 recreations showed that behaviour-only rows reproduce the function of the original and none of its look (§5.5, D-40).
@@ -966,26 +966,26 @@ Environment variables: `MDV6_APP` (launcher bundle override); `MDV6_SUPPORT_DIR`
 
 ## 11. Traceability matrix (id → where realized)
 
-Statuses: a plain row is realised and verified as written; *not yet realised* marks specified work with no implementation; **open defect** marks a known code violation; *verification pending* marks an implemented path whose revised behavior has not yet been observed. Every row is plain except **C-19**, **E-31**, **T-49** and **T-50**, which v0.12 added and v0.12.1 marked *not yet realised* (no implementation and no test exist yet), and the v0.14 rows — R-44…R-51, C-05.1, C-06.4, C-06.5, C-09.1, C-20…C-22, I-016…I-018, K-17…K-19, E-32…E-37, T-52…T-62 — and the v0.14 and v0.14.1 amendments to R-01, R-04, R-06, R-08, R-09, R-10, R-16, R-24, R-26, R-34, R-35, C-02 (rule 9), C-04, C-06.1 (rule 0), C-12 (step 0), C-13, C-17, I-001, I-003, E-02 and E-26, with E-38, which are *not yet realised* in this tree: the features exist in the original at `68aa008` and not here. The v0.8 *not yet realised* and **open defect** rows were built and fixed by the v0.8 build, the v0.9/v0.10 chrome rows by the v0.9–v0.10 build, and the observed rows (T-44..T-49) were seen on screen — `SPEC_BUILD_REPORT.md` carries the per-id evidence. *Where realised* names this repository's files (`mdv6/…`).
+Statuses: a plain row is realised and verified as written; *not yet realised* marks specified work with no implementation; **open defect** marks a known code violation; *verification pending* marks an implemented path whose revised behavior has not yet been observed. Every row is plain except the three marked *verification pending* (R-01, R-45, R-46), whose clauses need a person at an unlocked console. C-19, E-31, T-49 and T-50 were built by W8 (`e61c60f`); the v0.14 rows and amendments were built by W10–W15 (`a78d2ec`…) — `SPEC_BUILD_REPORT.md` carries the per-id evidence. The v0.8 *not yet realised* and **open defect** rows were built and fixed by the v0.8 build, the v0.9/v0.10 chrome rows by the v0.9–v0.10 build, and the observed rows (T-44..T-49) were seen on screen — `SPEC_BUILD_REPORT.md` carries the per-id evidence. *Where realised* names this repository's files (`mdv6/…`).
 
 | Spec id | Where realized | Verified by |
 | ------- | -------------- | ----------- |
-| R-01 | `mdv6App.swift`, `ContentView.loadFile/select`, addressed notifications; frontmost-document-window targeting and background opens *not yet realised* | T-03, T-04, T-22, T-24, T-26, T-40, T-61 |
+| R-01 | `mdv6App.swift`, `ContentView.loadFile/select`, addressed notifications; frontmost-document-window targeting and background opens (v0.14); *verification pending*: `open -g` activation unobserved (locked console, W15) | T-03, T-04, T-22, T-24, T-26, T-40, T-61 |
 | R-02 | `ContentView.loadDirectory` | T-04 |
 | R-03 | `ContentView.handleDrop` | T-04 |
-| R-04 | `ParsedDocument`, `ContentView.readDocument/loadCurrentEntry`; BOM removal *not yet realised* | T-30, T-39, T-52 |
+| R-04 | `ParsedDocument`, `ContentView.readDocument/loadCurrentEntry`; BOM removal (v0.14) | T-30, T-39, T-52 |
 | R-05 | `FileWatcher`, `ContentView` watcher hookup | T-29 |
-| R-06 | `persistScrollPosition`, `Database.scroll_positions`; removed-row exception *not yet realised* | T-28, T-55 |
+| R-06 | `persistScrollPosition`, `Database.scroll_positions`; removed-row exception (v0.14) | T-28, T-55 |
 | R-07 | MarkdownUI via `ThemeManager.markdownTheme` | T-05 |
-| R-08 | `CodeRenderer`, `CodeBlockChrome`; diff exception *not yet realised* | T-06, T-58 |
-| R-09 | `MermaidCodeBlockChrome`, `MDVMermaidDiagramView`; native-only style menu/export *not yet realised* | T-21, T-54 |
-| R-10 | `MDVMermaidPipeline`, `MermaidFallbackView`; C-06.4 dispatch *not yet realised* | T-13, T-15, T-54 |
+| R-08 | `CodeRenderer`, `CodeBlockChrome`; diff exception (v0.14) | T-06, T-58 |
+| R-09 | `MermaidCodeBlockChrome`, `MDVMermaidDiagramView`; native-only style menu/export (v0.14) | T-21, T-54 |
+| R-10 | `MDVMermaidPipeline`, `MermaidFallbackView`; C-06.4 dispatch (v0.14) | T-13, T-15, T-54 |
 | R-11 | `MDVMermaidDiagramView.displayWidth`, raster cache; native-only scope (v0.14.1) | T-18 |
 | R-12 | `MathMarkdown`, math image providers/views | T-07 |
 | R-13 | heading math scales, `MDVTheme.headingSizeEms` | T-08, T-11 |
 | R-14 | `MathImageCache`, `MathSymbols` | T-07 |
 | R-15 | Mermaid math substitution/raster composition | T-17 |
-| R-16 | `ImageProviders`, `ImageLoading` (`RemoteImageLoader`, C-16; `ImageDecoding`, K-14), View menu toggle; the inline-image clause *not yet realised* | T-09, T-41, T-59 |
+| R-16 | `ImageProviders`, `ImageLoading` (`RemoteImageLoader`, C-16; `ImageDecoding`, K-14), View menu toggle; the inline-image clause (v0.14) | T-09, T-41, T-59 |
 | R-17 | `smartenMarkdown`, `ContentView.blockView` ordering | T-10 |
 | R-18 | per-window stacks, snapshot push/apply/drop paths | T-22, T-25, T-27, T-28, T-40 |
 | R-19 | `DocumentSession.handleLink` (resolve, then classify; fragments per C-11 and C-19) | T-22, T-49 |
@@ -993,18 +993,18 @@ Statuses: a plain row is realised and verified as written; *not yet realised* ma
 | R-21 | inspector, TOC parsing/views | T-08, T-31 |
 | R-22 | selection, `copySection`, heading interaction | T-30 |
 | R-23 | editor picker and launcher | T-38 |
-| R-24 | find state, match counting/highlighting/routing; C-09.1 typography and the hidden-header clause *not yet realised* | T-23, T-39, T-52, T-60 |
+| R-24 | find state, match counting/highlighting/routing; C-09.1 typography and the hidden-header clause (v0.14) | T-23, T-39, T-52, T-60 |
 | R-25 | `Database.search`, global-search UI | T-24 |
-| R-26 | index/reindex/prune/remove lifecycle; *Close All* *not yet realised* | T-24, T-25, T-55 |
-| R-27 | `BookmarksManager`, title/anchor/menu paths; row context menu reordering; block-0 anchor/title exception (R-44) *not yet realised* | T-22, T-26, T-48, T-52 |
-| R-28 | `PlaceholderStore` (with the R-27 title), `DocumentSession.setPlaceholder/jumpToPlaceholder/clearPlaceholder`, `PlaceholderRow` and `BookmarksPaneModel` (first row, `⌘0`, *Clear Placeholder*); hidden-header exclusion *not yet realised* | T-27, T-44, T-48, T-52 |
+| R-26 | index/reindex/prune/remove lifecycle; *Close All* (v0.14) | T-24, T-25, T-55 |
+| R-27 | `BookmarksManager`, title/anchor/menu paths; row context menu reordering; block-0 anchor/title exception (R-44) (v0.14) | T-22, T-26, T-48, T-52 |
+| R-28 | `PlaceholderStore` (with the R-27 title), `DocumentSession.setPlaceholder/jumpToPlaceholder/clearPlaceholder`, `PlaceholderRow` and `BookmarksPaneModel` (first row, `⌘0`, *Clear Placeholder*); hidden-header exclusion (v0.14) | T-27, T-44, T-48, T-52 |
 | R-29 | `ThemeManager`, toolbar picker | T-12, T-42 |
 | R-30 | font-scale step/HUD and scaled renderers | T-11, T-42 |
 | R-31 | `HelpManager.openHelp` | T-38 |
 | R-32 | C-04 `@AppStorage` keys | T-42 |
 | R-33 | `bin/mdv6` | T-03 |
-| R-34 | `Makefile` (`check-version` exact-tag gate, `dist` chain), `build.sh`; mermaid.js fetch *not yet realised* | T-01, T-02, T-43, T-54 |
-| R-35 | diagnostic call sites and absence of content logging; WebKit-process clause *not yet realised* | T-36, T-54 |
+| R-34 | `Makefile` (`check-version` exact-tag gate, `dist` chain), `build.sh`; mermaid.js fetch (v0.14) | T-01, T-02, T-43, T-54 |
+| R-35 | diagnostic call sites and absence of content logging; WebKit-process clause (v0.14) | T-36, T-54 |
 | R-36 | `ContentLimits` before every parser; fallback views | T-13, T-41 |
 | R-37 | `Tests/mdv6Tests`, `Tests/mdv6RenderTests`, `.github/workflows/build.yml` | `swift test`, CI |
 | R-38 | `mdv6/Grammars/swift`, `mdv6/Grammars/sql`, `CodeLanguage` | T-37 |
@@ -1013,39 +1013,39 @@ Statuses: a plain row is realised and verified as written; *not yet realised* ma
 | R-41 | `ContentLimits` checks in `DocumentSession.readDocument`, `MDVMermaidPipeline.prepare`, `MathImageCache.typeset`, `ImageLoading` | T-41 |
 | R-42 | `SidebarViews` (chrome views), `ChromeModel` (rules), `DocumentRootView` (toolbar, title, strip), `ArticleView` (rhythm, stripe, find button) | T-44, T-45, T-46, T-47, T-48 |
 | R-43 | `mdv6/Grammars/{cpp,json,lua,opencl,perl,markdown,markdown-inline}`, `mdv6/Queries/*-highlights.scm`, `CodeLanguage`, `CodeRenderer.tsLanguage` (embedded inline pass) | T-51 |
-| R-44 | *not yet realised* — `Frontmatter` (`frontmatterSpan`, `frontmatterRows`), `FrontmatterTableView`, `ParsedDocument` rule 9, View-menu toggle | T-52 |
-| R-45 | *not yet realised* — `PrintController` (pre-pass, block PDFs, container, pagination), File · Print… | T-53 |
-| R-46 | *not yet realised* — `MermaidDispatch` (C-06.4), `MermaidWebView`/`MermaidWebRenderer` (C-06.5), `build.sh` mermaid.js fetch and digest check | T-13, T-21, T-54 |
-| R-47 | *not yet realised* — `DocumentSession.closeFile/closeAll`, File-menu items, *Close All* confirmation | T-55 |
-| R-48 | *not yet realised* — `DocumentSession.stepFile`, Navigate-menu items, ⌃⇥ key monitor | T-56 |
-| R-49 | *not yet realised* — `ScrollKeyMonitor`, enclosing-scroll-view accessor in `ArticleView` | T-57 |
-| R-50 | *not yet realised* — `DiffHighlighter` (C-05.1), `CodePalette` diff fields, `CodeRenderer` dispatch | T-58 |
-| R-51 | *not yet realised* — `RawHTMLImages` (C-22.1), `HTMLImageSpec`, `ImageProviders` (block and inline) | T-59 |
-| C-01 | `Info.plist`, entitlements, `build.sh`; `mermaid.min.js` resource *not yet realised* | T-01, T-54 |
-| C-02 | `ParsedDocument.parseBlocks/parseTOC`, `blockLines`/`lineCount` (rule 8); rule 9 *not yet realised* | T-07, T-30, T-39, T-49, T-50, T-52 |
+| R-44 | `Frontmatter` (`frontmatterSpan`, `frontmatterRows`), `FrontmatterTableView`, `ParsedDocument` rule 9, View-menu toggle | T-52 |
+| R-45 | `PrintController` (pre-pass, block PDFs, container, pagination), File · Print…; *verification pending*: the print panel and Save as PDF unobserved (locked console, W15); the pipeline is T-53's scripted half | T-53 |
+| R-46 | `MermaidDispatch` (C-06.4), `MermaidWebView`/`MermaidWebRenderer` (C-06.5), `tools/fetch-mermaid.sh` (fetch and digest check); *verification pending*: right-click menu, wheel over a diagram and VoiceOver unobserved on screen (W15); `testHostIntegration` holds them at unit level | T-13, T-21, T-54 |
+| R-47 | `DocumentSession.closeFile/closeAll`, File-menu items, *Close All* confirmation | T-55 |
+| R-48 | `DocumentSession.stepFile`, Navigate-menu items, ⌃⇥ key monitor | T-56 |
+| R-49 | `ScrollKeyMonitor`, `EnclosingScrollViewAccessor` in `DocumentRootView` | T-57 |
+| R-50 | `DiffHighlighter` (C-05.1), `CodePalette` diff fields, `CodeRenderer` dispatch | T-58 |
+| R-51 | `RawHTMLImages` (C-22.1), `HTMLImageSpec`, `ImageProviders` (block and inline) | T-59 |
+| C-01 | `Info.plist`, entitlements, `build.sh`; `mermaid.min.js` resource (v0.14) | T-01, T-54 |
+| C-02 | `ParsedDocument.parseBlocks/parseTOC`, `blockLines`/`lineCount` (rule 8); rule 9 (v0.14) | T-07, T-30, T-39, T-49, T-50, T-52 |
 | C-03 | `Database.search`, `FTSQuery` (rank, path tie-breaks) | T-24 |
-| C-04 | `@AppStorage` declarations and invalid-value fallbacks; `mdv6_show_frontmatter` *not yet realised* | T-11, T-42, T-52 |
-| C-05 | language resolution, highlighting, code cache; C-05.1 *not yet realised* | T-06, T-11, T-51, T-58 |
-| C-06 | `MDVMermaidPipeline`, diagram theme/repairs; C-06.4/C-06.5 *not yet realised*; C-06.1 rule 0 *not yet realised* | T-13..T-20, T-54 |
+| C-04 | `@AppStorage` declarations and invalid-value fallbacks; `mdv6_show_frontmatter` (v0.14) | T-11, T-42, T-52 |
+| C-05 | language resolution, highlighting, code cache; C-05.1 (v0.14) | T-06, T-11, T-51, T-58 |
+| C-06 | `MDVMermaidPipeline`, diagram theme/repairs; C-06.4/C-06.5 (v0.14); C-06.1 rule 0 (v0.14) | T-13..T-20, T-54 |
 | C-07 | `MathSpec`, `MathMarkdown`, `MathSymbols`, `MathImageCache` | T-07, T-08, T-17 |
 | C-08 | `Anchors` (`bookmarkFingerprint`, `resolveBookmarkAnchor`), `Database` bookmarks/scroll tables | T-26, T-28 |
-| C-09 | `MDVTheme`, `ThemeManager.markdownTheme`; C-09.1 *not yet realised*; declared fields (v0.14.1) | T-08, T-10, T-12, T-60 |
+| C-09 | `MDVTheme`, `ThemeManager.markdownTheme`; C-09.1 (v0.14); declared fields (v0.14.1) | T-08, T-10, T-12, T-60 |
 | C-10 | `SmartTypography.swift` | T-10 |
 | C-11 | `headingSlug` | T-22 |
-| C-12 | `sectionRange`, `copySection`, `stripInlineMarkdown`; step (0) *not yet realised* | T-08, T-22, T-30, T-59 |
-| C-13 | `build.sh`; mermaid.js fetch and digest *not yet realised* | T-01, T-54 |
+| C-12 | `sectionRange`, `copySection`, `stripInlineMarkdown`; step (0) (v0.14) | T-08, T-22, T-30, T-59 |
+| C-13 | `build.sh`; mermaid.js fetch and digest (v0.14) | T-01, T-54 |
 | C-14 | fallback views, placeholders, beeps, alerts | T-07, T-09, T-13, T-26, T-38, T-41 |
 | C-15 | `HistoryEntry`, `HistoryManager.save/load` | T-25 |
 | C-16 | `ImageLoading.RemoteImageLoader` (ephemeral session, header-free, redirect/size/time limits) | T-41 |
-| C-17 | `tools/render-harness/Sources/render-harness/main.swift`, `DocumentRenderer`, `RenderMetrics.PixelCompare`, `test-docs/render-cases.json`; `web` status and `--print-pdf` *not yet realised* | T-13, T-17, T-19, T-45, T-46, T-53 |
+| C-17 | `tools/render-harness/Sources/render-harness/main.swift`, `DocumentRenderer`, `RenderMetrics.PixelCompare`, `test-docs/render-cases.json`; `web` status and `--print-pdf` (v0.14) | T-13, T-17, T-19, T-45, T-46, T-53 |
 | C-18 | `SidebarViews` (C-18.3–C-18.9), `DocumentRootView` (C-18.1, C-18.2), `ArticleView` (C-18.7, C-18.10), `ChromeModel` (metrics and rules), `reference/*.png` | T-44, T-47, T-48 |
-| C-19 | *not yet realised* — `LineCitation.parse/resolve` (grammar, range normalisation, line→block), `DocumentSession.handleLink` (dispatch, scroll, flash) | T-49, T-50 |
-| C-20 | *not yet realised* — see R-44 | T-52 |
-| C-21 | *not yet realised* — see R-45; `render-harness --print-pdf` | T-53 |
-| C-22 | *not yet realised* — see R-51 | T-59 |
-| I-001 | pure render inputs; `RemoteImageLoader` the only network path; web path and print *not yet realised* | T-09, T-13, T-41, T-53, T-54 |
+| C-19 | `LineCitation.parse/resolve` (grammar, range normalisation, line→block), `DocumentSession.handleLink` (dispatch, scroll, flash) | T-49, T-50 |
+| C-20 | see R-44 | T-52 |
+| C-21 | see R-45; `render-harness --print-pdf` | T-53 |
+| C-22 | see R-51 | T-59 |
+| I-001 | pure render inputs; `RemoteImageLoader` the only network path; web path and print (v0.14) | T-09, T-13, T-41, T-53, T-54 |
 | I-002 | `ContentLimits` before every parser; fallback per renderer | T-13, T-41 |
-| I-003 | `Diagnostics` (R-35), `RemoteImageLoader` (URL-only disclosure); WebKit clause *not yet realised* | T-36, T-41, T-54 |
+| I-003 | `Diagnostics` (R-35), `RemoteImageLoader` (URL-only disclosure); WebKit clause (v0.14) | T-36, T-41, T-54 |
 | I-004 | cached `ParsedDocument` block split | T-30 |
 | I-005 | shared display/raster size function | T-18 |
 | I-006 | `Database` connection flags/pragmas | T-33 |
@@ -1058,9 +1058,9 @@ Statuses: a plain row is realised and verified as written; *not yet realised* ma
 | I-013 | `HistoryManager.add/select` ordering | T-25 |
 | I-014 | `ArticleBlockView.blockInset` (max(bottom, top)), `RhythmMetric`, `DocumentRenderer.Options.singleView` | T-45 |
 | I-015 | one chrome file (`SidebarViews`) over theme-independent `ChromeModel` rules | T-44 |
-| I-016 | *not yet realised* — `Vendor/MarkdownUI` and its `README.md` | T-62 |
-| I-017 | *not yet realised* — `PrintController` (fixed print theme and scale) | T-53 |
-| I-018 | *not yet realised* — `ParsedDocument` rule 9; the toggle is view-only | T-52 |
+| I-016 | `Vendor/MarkdownUI` and its `README.md` | T-62 |
+| I-017 | `PrintController` (fixed print theme and scale) | T-53 |
+| I-018 | `ParsedDocument` rule 9; the toggle is view-only | T-52 |
 | K-01 | `Package.swift`, `Info.plist`, build checks | T-01 |
 | K-02 | `Info.plist`, entitlements, bundle build | T-01 |
 | K-03 | history/search/bookmark limits | T-24, T-25, T-26 |
@@ -1077,11 +1077,11 @@ Statuses: a plain row is realised and verified as written; *not yet realised* ma
 | K-14 | `ContentLimits` | T-41 |
 | K-15 | bitmap-backed math (`MathImageCache.bake`) | T-32 |
 | K-16 | `ChromeMetrics`, `ChromeOpacity`; K-16 band in `RhythmAndDisplayMathTests` | T-44, T-45, T-48 |
-| K-17 | *not yet realised* — `PrintController` constants | T-53 |
-| K-18 | *not yet realised* — `ScrollKeyMonitor` constants | T-57 |
-| K-19 | *not yet realised* — `build.sh` pin, `MermaidWebView` constants | T-54 |
+| K-17 | `PrintController` constants | T-53 |
+| K-18 | `ScrollKeyMonitor` constants | T-57 |
+| K-19 | `tools/fetch-mermaid.sh` pin, `MermaidWebPage` constants | T-54 |
 | E-01 | subgraph ownership normalization | T-14 |
-| E-02 | diagram fallback; the web-path clause *not yet realised* | T-13, T-54 |
+| E-02 | diagram fallback; the web-path clause (v0.14) | T-13, T-54 |
 | E-03 | read/decode guards and startup path | T-04, T-28, T-39 |
 | E-04 | empty-directory path | T-04 |
 | E-05 | broken local-link handling | T-22 |
@@ -1105,19 +1105,19 @@ Statuses: a plain row is realised and verified as written; *not yet realised* ma
 | E-23 | fence/splitter deviations | T-39 |
 | E-24 | empty global search | T-24 |
 | E-25 | stale render cancellation | T-13 |
-| E-26 | key-window routing; *Close All* exception *not yet realised* | T-40, T-55 |
+| E-26 | key-window routing; *Close All* exception (v0.14) | T-40, T-55 |
 | E-27 | missing snapshot/placeholder targets | T-27 |
 | E-28 | `ContentLimits.exceededMessage` paths | T-41 |
 | E-29 | `DocumentSession.tocSelectedBlock` and its setters/clears | T-44 |
 | E-30 | `DocumentRootView` (`WindowAccessor` marks each window non-restorable) | T-28 |
-| E-31 | *not yet realised* — `LineCitation.resolve` (total resolution: last-block clamp, first-block fallback); `#L0` slug fall-through in `DocumentSession.handleLink` | T-49, T-50 |
-| E-32 | *not yet realised* — `frontmatterSpan` rejection paths | T-52 |
-| E-33 | *not yet realised* — `PrintController` guards and fallbacks | T-53 |
-| E-34 | *not yet realised* — `MermaidWebView` failure and load-refusal paths | T-54 |
-| E-35 | *not yet realised* — `RawHTMLImages` literal paths | T-59 |
-| E-36 | *not yet realised* — *Close All* broadcast to every window | T-55 |
-| E-37 | *not yet realised* — `ScrollKeyMonitor.documentOwnsKeys` | T-57 |
-| E-38 | *not yet realised* — window creation on demand in `AppModel` (open events, ⌘O, bookmarks, ⌘0, ⌘?, Dock reopen) | T-61 |
+| E-31 | `LineCitation.resolve` (total resolution: last-block clamp, first-block fallback); `#L0` slug fall-through in `DocumentSession.handleLink` | T-49, T-50 |
+| E-32 | `frontmatterSpan` rejection paths | T-52 |
+| E-33 | `PrintController` guards and fallbacks | T-53 |
+| E-34 | `MermaidWebView` failure and load-refusal paths | T-54 |
+| E-35 | `RawHTMLImages` literal paths | T-59 |
+| E-36 | *Close All* broadcast to every window | T-55 |
+| E-37 | `ScrollKeys.documentOwnsKey` | T-57 |
+| E-38 | window creation on demand (`AppModel.needsWindow`, `AppEnvironment.onDemand`) (open events, ⌘O, bookmarks, ⌘0, ⌘?, Dock reopen) | T-61 |
 
 ## 12. Open questions and decisions to confirm
 
@@ -1182,6 +1182,7 @@ Statuses: a plain row is realised and verified as written; *not yet realised* ma
 
 *Revision history*
 
+- *v0.14.8 (2026-09-27): §11 and *Status* follow the built tree — the v0.14 rows realised by W10–W15, the C-19/E-31/T-49/T-50 markers (stale since W8, `e61c60f`) removed, *verification pending* on R-01 (`open -g` activation), R-45 (the print panel) and R-46 (right-click, wheel, VoiceOver on a web diagram), which the W15 observed pass could not see at a locked console; file names corrected to the build's (`tools/fetch-mermaid.sh`, `EnclosingScrollViewAccessor`, `ScrollKeys.documentOwnsKey`). No requirement changed; no id added or renumbered.*
 - *v0.14.7 (2026-09-27): F-184, found by the W14 build — R-45 and T-53 (2) required that no image object lie inside an inline formula's rectangle, but SwiftUI rasterizes every image placed in a line of text (measured: even an empty `Image(size:)` becomes a bitmap), so any `ImageRenderer` layout must leave an image where an inline formula sits. The vector formula is drawn over a fully transparent 1 × 1-pixel spacer; R-45 and T-53 (2) now except that spacer. No id added or renumbered.*
 - *v0.14.6 (2026-09-27): F-183, found by the W13 build — C-13 put the fetched `mermaid.min.js` at `mdv6/mermaid.min.js` and made it a SwiftPM resource, but the file is not committed, and SwiftPM fails on an absent declared resource (and warns on an absent excluded one), so a clean checkout's `swift test` (R-37) could not build. The script and its licence move to `Vendor/mermaid/` (outside every target), `tools/fetch-mermaid.sh` carries the fetch and the digest check, and the application reads the script flat from `Resources/`. No id added or renumbered.*
 - *v0.14.5 (2026-09-27): F-182, found by the W11 build — C-09.1 gave h1/h2 a bottom padding of $0.3 \times$ the heading size whether or not the rule is drawn, while the article's own heading pads $0.3 \times$ the **body** size and only above a rule; a find match therefore grew an h2 by 7 pt and an h1 by 4 pt under `high-contrast`, contradicting C-09.1's purpose and T-60. The table now states the article heading's padding. No id added or renumbered.*
