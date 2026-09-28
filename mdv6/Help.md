@@ -8,6 +8,7 @@ mdv6 reads Markdown the way a good document viewer reads a PDF: typographically 
 - Double-click a `.md`, `.markdown` or `.mdown` file in Finder, drag one onto the icon, or drop it onto the window (`.txt` and `.mkd` are accepted for drops).
 - From the terminal: `mdv6 FILE…` opens each file (the last is displayed), `mdv6 DIR` opens a directory (`README.md` or the first Markdown file, the rest listed in history), `echo '# hi' | mdv6 -` opens standard input, `mdv6 --version` prints the version. Install the tool once with **mdv6 → Install Command Line Tool…**.
 - A file that is not valid UTF-8 or cannot be read leaves the window unchanged.
+- **⌘W** closes the current file — it leaves the history list and the next file takes its place. **⇧⌘W** closes the window (mdv6 keeps running; open a file and a window comes back). **⌥⌘W** closes everything and empties the history list after asking, because it also clears the search index; bookmarks stay.
 
 ## Moving around
 
@@ -16,6 +17,8 @@ mdv6 reads Markdown the way a good document viewer reads a PDF: typographically 
 - **Back / Forward** (⌘← / ⌘→) walk the places you have been, including jumps within a document.
 - Links to local Markdown files open in mdv6; every other link (web, other file types, missing files) goes to the system.
 - Click a heading to copy its whole section as Markdown; the section flashes. Drag across a paragraph to select text and ⌘C to copy it.
+- **⇧⌘]** / **⇧⌘[** step to the next and previous file down the history list, stopping at the ends; **⌃⇥** / **⌃⇧⇥** do the same.
+- **↓** / **↑** scroll a few lines, **Page Down** / **Page Up** and **Space** / **⇧Space** a screen, **Home** / **End** to the top and bottom — without clicking into the text first.
 - Zoom with ⌘= and ⌘-, reset with **View → Actual Size**.
 
 ## Find
@@ -34,11 +37,21 @@ mdv6 reads Markdown the way a good document viewer reads a PDF: typographically 
 - Section headers (**HISTORY**, **ON THIS PAGE**, **BOOKMARKS**) each carry a magnifier that reveals a search or filter field; Esc hides it again.
 - The **BOOKMARKS** header collapses the pane; drag the divider above it to resize. Drag the sidebar's divider (180–400 pt) and the inspector's left edge (180–520 pt) to resize them; the inspector's width and visibility are remembered.
 
+## Frontmatter
+
+- A YAML (`---`) or TOML (`+++`) metadata header at the very top of a file renders as a properties table above the document instead of as prose.
+- **View → Show Frontmatter** hides it; the setting is remembered.
+
 ## Diagrams and math
 
-- ` ```mermaid ` fences render natively (flowcharts, state, sequence, class, ER and XY charts). Hover a diagram for its style menu (Document, Light, Dark, Tokyo Night, Catppuccin), **Show Mermaid source**, **Export diagram as PNG** and copy; pinch to zoom. Diagram types the renderer lacks show their source with a note.
+- ` ```mermaid ` fences render natively for flowcharts, state, sequence, class, ER and XY charts: hover for the style menu (Document, Light, Dark, Tokyo Night, Catppuccin), **Show Mermaid source**, **Export diagram as PNG** and copy; pinch to zoom. Gantt, pie, timeline, journey, quadrant, requirement, mind-map and git-graph diagrams render through a bundled mermaid.js (a little slower the first time); hover for **Show Mermaid source** and copy. A diagram that fails shows its source with a note.
 - LaTeX between `$…$` (inline) and `$$…$$` (display) is typeset natively in paragraphs, headings, lists, quotes and tables; display math on its own line is centred and offers **Copy LaTeX**. LaTeX the typesetter rejects is shown as source with the parser's message.
-- Fenced code is highlighted for C, C++ (and Metal), Go, Rust, Bash, JavaScript, YAML, TOML, Python, Ruby, Swift, SQL, OpenCL, JSON, Lua, Perl and Markdown; hover a block to wrap long lines or copy it, and right-click a shell block for **Copy Without Prompts**.
+- Fenced code is highlighted for C, C++ (and Metal), Go, Rust, Bash, JavaScript, YAML, TOML, Python, Ruby, Swift, SQL, OpenCL, JSON, Lua, Perl and Markdown; `diff` and `patch` blocks tint added and removed lines. Hover a block to wrap long lines or copy it, and right-click a shell block for **Copy Without Prompts**.
+- Raw `<img src=… width=…>` tags (the README header-image pattern) render as images at the size they ask for; remote ones follow **Load Remote Images**.
+
+## Printing
+
+- **⌘P** prints through the macOS print panel, whose **PDF** menu is also Save as PDF. Text, formulas and diagrams print as vector; page breaks fall between blocks; the page uses the High Contrast theme at a type size scaled to the paper, whatever the screen shows.
 
 ## Editor integration
 

@@ -23,7 +23,8 @@ check "T-03 bin/mdv6 nope.md exits 1 with message" 'out=$(bin/mdv6 nope.md 2>&1 
 check "T-03 MDV6_APP=/nonexistent falls through search order" '[ "$(MDV6_APP=/nonexistent bin/mdv6 --version)" = 1.0.0 ]'
 check "§5.2 bin/mdv6 -h prints usage" 'bin/mdv6 -h | grep -q "^usage: mdv6"'
 # The last search step is Spotlight; a stub mdfind on PATH makes it return nothing so the not-found path is reachable.
-check "§5.2 bundle not found exits 1 before args" 'tmp=$(mktemp -d); cp bin/mdv6 "$tmp/mdv6"; printf "#!/bin/sh\nexit 0\n" > "$tmp/mdfind"; chmod +x "$tmp/mdfind"; out=$(cd / && MDV6_APP=/nonexistent PATH="$tmp:/usr/bin:/bin" HOME=/nonexistent "$tmp/mdv6" --version 2>&1); rc=$?; rm -rf "$tmp"; [ $rc -eq 1 ] && echo "$out" | grep -q "mdv6.app not found"'
+# The copy's /Applications step points at a missing directory, so an installed bundle on the host does not mask the path.
+check "§5.2 bundle not found exits 1 before args" 'tmp=$(mktemp -d); sed "s#/Applications/mdv6.app#$tmp/none.app#g" bin/mdv6 > "$tmp/mdv6"; chmod +x "$tmp/mdv6"; printf "#!/bin/sh\nexit 0\n" > "$tmp/mdfind"; chmod +x "$tmp/mdfind"; out=$(cd / && MDV6_APP=/nonexistent PATH="$tmp:/usr/bin:/bin" HOME=/nonexistent "$tmp/mdv6" --version 2>&1); rc=$?; rm -rf "$tmp"; [ $rc -eq 1 ] && echo "$out" | grep -q "mdv6.app not found"'
 check "T-02 make dist refuses untagged HEAD before clean/build" 'out=$(make dist 2>&1); rc=$?; [ $rc -ne 0 ] && echo "$out" | grep -q check-version && ! echo "$out" | grep -q "swift build" && ! echo "$out" | grep -q "rm -rf build" && [ -d build/mdv6.app ]'
 check "T-02 make dist VERSION=9.9.9 refused" 'out=$(make dist VERSION=9.9.9 2>&1); rc=$?; [ $rc -ne 0 ] && echo "$out" | grep -q "command line" && [ -d build/mdv6.app ]'
 check "R-37 swift test runs" 'swift test >/dev/null 2>&1'
