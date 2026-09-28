@@ -214,6 +214,16 @@ public final class DocumentSession: ObservableObject, ArticleHost {
         enterEmpty()
     }
 
+    // MARK: R-45 print
+
+    /// R-45 / I-017: what print reads — the document and the print-relevant preferences, no screen state; nil (⌘P beeps,
+    /// E-33) with no document or one with no blocks.
+    public func printRequest() -> PrintRequest? {
+        guard let doc = document, !doc.blocks.isEmpty, let entry = currentEntry else { return nil }
+        return PrintRequest(document: doc, baseURL: baseURL, smartTypography: model.preferences.smartTypography,
+                            showFrontmatter: model.preferences.showFrontmatter, mermaidStyle: mermaidStyle, jobTitle: entry.filename)
+    }
+
     // MARK: R-47 closing, R-48 stepping
 
     /// R-47: *Close File* is enabled while a file is displayed.

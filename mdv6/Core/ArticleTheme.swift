@@ -13,7 +13,9 @@ public enum ArticleTheme {
 
     /// C-09 → MarkdownUI: body at `baseFontSize × zoom`, headings by `headingSizeEms`, the theme's colours, the
     /// `TYPOGRAPHY.md` per-element spacing as margins, H1/H2 rules, monospace code on the secondary background.
-    public static func markdownTheme(for t: MDVTheme, zoom: CGFloat) -> Theme {
+    /// `marginScale` multiplies the absolute point margins and paddings — print sets it to s_p (C-21.1); the screen
+    /// leaves it at 1 (zoom grows the type, not the column's rhythm).
+    public static func markdownTheme(for t: MDVTheme, zoom: CGFloat, marginScale m: CGFloat = 1) -> Theme {
         let base = t.baseFontSize * zoom
         func heading(_ level: Int, _ c: BlockConfiguration) -> AnyView {
             let em = t.headingSizeEms[level - 1]
@@ -37,9 +39,9 @@ public enum ArticleTheme {
                 return AnyView(VStack(alignment: .leading, spacing: 0) {
                     label.relativePadding(.bottom, length: .em(0.3))
                     Divider().overlay(t.divider)                        // C-18.7: a full-column rule in the divider colour
-                }.markdownMargin(top: top, bottom: bottom))
+                }.markdownMargin(top: top * m, bottom: bottom * m))
             }
-            return AnyView(label.markdownMargin(top: top, bottom: bottom))
+            return AnyView(label.markdownMargin(top: top * m, bottom: bottom * m))
         }
         var theme = Theme()
             .text {
@@ -58,7 +60,7 @@ public enum ArticleTheme {
                 c.label
                     .fixedSize(horizontal: false, vertical: true)
                     .relativeLineSpacing(.em(t.paragraphLineSpacingEm))
-                    .markdownMargin(top: 0, bottom: t.paragraphBottomSpacing)
+                    .markdownMargin(top: 0, bottom: t.paragraphBottomSpacing * m)
             }
             .blockquote { c in
                 HStack(spacing: 0) {
@@ -66,7 +68,7 @@ public enum ArticleTheme {
                     c.label.markdownTextStyle { ForegroundColor(t.secondaryText) }.relativePadding(.horizontal, length: .em(1))
                 }
                 .fixedSize(horizontal: false, vertical: true)
-                .markdownMargin(top: 0, bottom: t.paragraphBottomSpacing)
+                .markdownMargin(top: 0, bottom: t.paragraphBottomSpacing * m)
             }
             .codeBlock { c in
                 ScrollView(.horizontal) {
@@ -74,14 +76,14 @@ public enum ArticleTheme {
                         .fixedSize(horizontal: false, vertical: true)
                         .relativeLineSpacing(.em(0.225))
                         .markdownTextStyle { FontFamilyVariant(.monospaced); FontSize(.em(0.85)) }
-                        .padding(16)
+                        .padding(16 * m)
                 }
                 .background(t.secondaryBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
-                .markdownMargin(top: 0, bottom: t.paragraphBottomSpacing)
+                .markdownMargin(top: 0, bottom: t.paragraphBottomSpacing * m)
             }
             .image { c in
-                c.label.markdownMargin(top: 0, bottom: t.paragraphBottomSpacing)
+                c.label.markdownMargin(top: 0, bottom: t.paragraphBottomSpacing * m)
             }
             .listItem { c in c.label.markdownMargin(top: .em(0.25)) }
             .taskListMarker { c in
@@ -96,17 +98,17 @@ public enum ArticleTheme {
                     .fixedSize(horizontal: false, vertical: true)
                     .markdownTableBorderStyle(.init(color: t.border))
                     .markdownTableBackgroundStyle(.alternatingRows(t.background, t.secondaryBackground))
-                    .markdownMargin(top: 0, bottom: t.paragraphBottomSpacing)
+                    .markdownMargin(top: 0, bottom: t.paragraphBottomSpacing * m)
             }
             .tableCell { c in
                 c.label
                     .markdownTextStyle { if c.row == 0 { FontWeight(.semibold) }; BackgroundColor(nil) }
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.vertical, 6).padding(.horizontal, 13)
+                    .padding(.vertical, 6 * m).padding(.horizontal, 13 * m)
                     .relativeLineSpacing(.em(0.25))
             }
             .thematicBreak {
-                Divider().relativeFrame(height: .em(0.25)).overlay(t.border).markdownMargin(top: 24, bottom: 24)
+                Divider().relativeFrame(height: .em(0.25)).overlay(t.border).markdownMargin(top: 24 * m, bottom: 24 * m)
             }
         theme = theme.heading1 { heading(1, $0) }.heading2 { heading(2, $0) }.heading3 { heading(3, $0) }
             .heading4 { heading(4, $0) }.heading5 { heading(5, $0) }.heading6 { heading(6, $0) }

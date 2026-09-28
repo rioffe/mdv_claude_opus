@@ -8,7 +8,7 @@ import AppKit
 public enum AppCommand: String, Sendable {
     case openFile, openInNewWindow, editCurrentFile, find, searchHistory, back, forward, toggleSidebar, toggleInspector,
          zoomIn, zoomOut, actualSize, bookmarkCurrentSpot, setPlaceholder, jumpToPlaceholder, slot1, slot2, slot3, slot4, slot5, help,
-         closeFile, closeAll, nextFile, previousFile
+         closeFile, closeAll, nextFile, previousFile, print
 }
 
 public enum CommandCenter {
@@ -288,6 +288,8 @@ public struct DocumentRootView: View {
         case .closeAll: confirmCloseAll()                                             // R-47, E-36
         case .nextFile: session.stepFile(by: 1)                                       // R-48
         case .previousFile: session.stepFile(by: -1)
+        case .print:                                                                  // R-45, E-33
+            if let r = session.printRequest() { PrintController.printDocument(r, window: window) } else { NSSound.beep() }
         }
     }
 

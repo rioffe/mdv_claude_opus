@@ -79,6 +79,18 @@ public final class MathImageCache {
         return .image(bake(mtImage, scale: scale), ascent: layout?.ascent ?? 0, descent: layout?.descent ?? 0)
     }
 
+    /// C-21.4: SwiftMath's own drawing-handler image, unbaked — drawn into a PDF context it stays vector glyphs. Nil
+    /// when SwiftMath rejects the LaTeX (the E-10 fallback prints instead) or over the K-14 ceiling.
+    public func vectorImage(for spec: MathSpec) -> NSImage? {
+        guard ContentLimits.admits(spec.latex.utf8.count, kind: .latex) else { return nil }
+        MathImageCache.registerSymbols()
+        var image = MathImage(latex: MathSymbols.preprocess(spec.latex), fontSize: spec.fontSize, textColor: spec.color.nsColor,
+                              labelMode: spec.display ? .display : .text)
+        let (error, mtImage, _) = image.asImage()
+        guard error == nil, let mtImage, mtImage.size.width > 0, mtImage.size.height > 0 else { return nil }
+        return mtImage
+    }
+
     /// I-008: an `NSBitmapImageRep`-backed image at the screen scale — never a drawing-handler-backed one.
     public func bake(_ image: NSImage, scale: CGFloat) -> NSImage {
         let size = image.size

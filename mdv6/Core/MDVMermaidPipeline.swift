@@ -297,6 +297,39 @@ extension MDVMermaidPipeline {
         return image
     }
 
+    /// C-21.3: the laid-out diagram as a one-page PDF at its display size for `width` — the library's CoreGraphics and
+    /// CoreText drawing, so labels stay glyphs; whole-`$$` node labels are drawn as vector math, not their baked bitmaps.
+    public static func pdf(_ p: MDVMermaidPrepared, width: CGFloat) -> (document: CGPDFDocument, page: CGPDFPage, size: CGSize)? {
+        let size = displaySize(for: p, width: width)
+        let fit = size.width / p.naturalSize.width
+        let data = NSMutableData()
+        var box = CGRect(origin: .zero, size: size)
+        guard let consumer = CGDataConsumer(data: data as CFMutableData), let ctx = CGContext(consumer: consumer, mediaBox: &box, nil) else { return nil }
+        ctx.beginPDFPage(nil)
+        ctx.setFillColor(p.theme.background.cgColor)
+        ctx.fill(box)
+        ctx.saveGState()
+        ctx.translateBy(x: 0, y: size.height)
+        ctx.scaleBy(x: fit, y: -fit)
+        DiagramRenderer(theme: p.theme.withTransparent(true)).render(p.positioned, in: ctx, bounds: CGRect(origin: .zero, size: p.naturalSize))
+        ctx.restoreGState()
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+        for plan in p.mathNodes {
+            let spec = MathSpec(latex: plan.latex, fontSize: plan.fontSize, color: MermaidMathNodes.rgba(p.theme.foreground), display: true)
+            guard let vector = MathImageCache.shared.vectorImage(for: spec) else { continue }
+            let o = plan.origin(scale: 1, fit: fit)
+            let w = plan.imageSize.width * fit, h = plan.imageSize.height * fit
+            vector.draw(in: CGRect(x: o.x, y: size.height - o.y - h, width: w, height: h))
+        }
+        NSGraphicsContext.restoreGraphicsState()
+        MermaidRepairs.drawSequenceExtras(p.sequenceExtras, in: ctx, theme: p.theme, scale: fit, pixelHeight: size.height)
+        ctx.endPDFPage()
+        ctx.closePDF()
+        guard let provider = CGDataProvider(data: data as CFData), let doc = CGPDFDocument(provider), let page = doc.page(at: 1) else { return nil }
+        return (doc, page, size)
+    }
+
     // MARK: C-06.3 document theme
 
     /// Mixes `a` toward `b` by `t`.

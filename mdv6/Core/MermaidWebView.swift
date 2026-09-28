@@ -246,6 +246,23 @@ public enum MermaidWebRenderer {
         return await session.result(timeout: timeout)
     }
 
+    /// C-21.3: the web path for print — the unpadded page laid out at `width` in a window never ordered front (no flash),
+    /// measured (5 s ceiling, K-17), then turned into a PDF by WebKit, so its labels print as vector.
+    public static func pdf(source: String, theme: MDVTheme, width: CGFloat) async -> (document: CGPDFDocument, page: CGPDFPage, size: CGSize)? {
+        let session = await Session(width: width, source: source, theme: theme, padded: false)
+        defer { session.close() }
+        guard case .height(let h) = await session.result(timeout: 5), h > 0 else { return nil }
+        let size = CGSize(width: width, height: ceil(h))
+        session.web.frame.size = size
+        session.window.setContentSize(size)
+        try? await Task.sleep(nanoseconds: 200_000_000)                              // K-17: settle before capture
+        let config = WKPDFConfiguration()
+        config.rect = CGRect(origin: .zero, size: size)
+        guard let data = try? await session.web.pdf(configuration: config),
+              let provider = CGDataProvider(data: data as CFData), let doc = CGPDFDocument(provider), let page = doc.page(at: 1) else { return nil }
+        return (doc, page, size)
+    }
+
     /// One offscreen page. Kept alive while its result is awaited (a `CGPDFPage` or snapshot is taken from it by print).
     @MainActor final class Session {
         let window: NSWindow

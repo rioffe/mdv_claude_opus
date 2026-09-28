@@ -210,6 +210,10 @@ struct DocumentCommands: Commands {
 
     var body: some Commands {
         let _ = { AppEnvironment.shared.openWindow = openWindow }()
+        CommandGroup(replacing: .printItem) {
+            Button("Print…") { CommandCenter.post(.print) }.keyboardShortcut("p", modifiers: .command)   // R-45
+                .disabled(session == nil)
+        }
         CommandGroup(replacing: .saveItem) {
             Button("Close File") { CommandCenter.post(.closeFile) }.keyboardShortcut("w", modifiers: .command)
                 .disabled(!(session?.canCloseFile ?? false))

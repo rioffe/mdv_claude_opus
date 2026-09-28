@@ -8,6 +8,7 @@ let usage = """
 usage: render-harness INPUT --output FILE [--width PT] [--scale S] [--theme ID]
        render-harness --scan ROOT --output-dir DIR
        render-harness --check MANIFEST [--case ID]
+       render-harness INPUT --print-pdf FILE [--paper letter|a4]
 """
 
 func fail(_ message: String, code: Int32) -> Never {
@@ -45,12 +46,26 @@ let outputDir = option("--output-dir")
 let manifestPath = option("--check")
 let onlyCase = option("--case")
 let output = option("--output")
+let printPDF = option("--print-pdf")
+let paper = option("--paper") ?? "letter"
 let width = option("--width").map { CGFloat(Double($0) ?? -1) } ?? 860
 let scale = option("--scale").map { CGFloat(Double($0) ?? -1) } ?? 2
 let themeId = option("--theme") ?? "high-contrast"
 guard width > 0, scale > 0 else { fail("invalid --width/--scale\n\(usage)", code: 2) }
 
 var exitCode: Int32 = 0
+if let printPDF {                                   // C-17: one JSON object per printed block part on stdout
+    guard args.count == 1 else { fail(usage, code: 2) }
+    Task { @MainActor in
+        do {
+            let blocks = try await HarnessRunner.printPDF(input: url(args[0]), output: url(printPDF), paper: paper)
+            let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+            for b in blocks { records.write((try encoder.encode(b)) + Data("\n".utf8)) }
+            exit(blocks.isEmpty ? 1 : 0)
+        } catch let e as HarnessError { fail("render-harness: \(e)", code: 2) } catch { fail("render-harness: \(error)", code: 1) }
+    }
+    RunLoop.main.run()
+}
 DispatchQueue.main.async {
     do {
         if let scanRoot {

@@ -147,6 +147,26 @@ public enum HarnessRunner {
         }
     }
 
+    // MARK: --print-pdf (C-17, T-53)
+
+    /// C-21 over one `.md`, or one raw `.mmd` wrapped as a single ```` ```mermaid ```` fence, to a paginated PDF at
+    /// `FILE`; returns one record per printed block part. Throws the exit-2 conditions (unreadable input, unwritable
+    /// output, unknown paper).
+    @MainActor
+    public static func printPDF(input: URL, output: URL, paper: String = "letter") async throws -> [PrintBlockRecord] {
+        let size: CGSize
+        switch paper { case "letter": size = CGSize(width: 612, height: 792); case "a4": size = CGSize(width: 595.28, height: 841.89)
+        default: throw HarnessError.usage("unknown paper \(paper)") }
+        guard var text = try? String(contentsOf: input, encoding: .utf8) else { throw HarnessError.unreadableInput(input.path) }
+        if input.pathExtension.lowercased() == "mmd" { text = "```mermaid\n" + text + "\n```" }
+        guard FileManager.default.fileExists(atPath: output.deletingLastPathComponent().path) else { throw HarnessError.unwritableOutput(output.path) }
+        let request = PrintRequest(document: ParsedDocument(raw: text), baseURL: input.deletingLastPathComponent(), smartTypography: true,
+                                   showFrontmatter: true, mermaidStyle: .document, jobTitle: input.lastPathComponent)
+        let out = await PrintController.renderPDF(request, paper: size)
+        do { try out.pdf.write(to: output) } catch { throw HarnessError.unwritableOutput(output.path) }
+        return out.blocks
+    }
+
     // MARK: --check (C-17)
 
     public static func loadManifest(_ url: URL) throws -> HarnessManifest {
