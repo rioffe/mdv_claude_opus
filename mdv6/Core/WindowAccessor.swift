@@ -26,6 +26,10 @@ public struct WindowAccessor: NSViewRepresentable {
     public static func configure(_ window: NSWindow) {
         window.isRestorable = false
         window.tabbingMode = .disallowed
+        // R-24 / R-49: a freshly opened window has no first responder (SwiftUI would hand it to the history list, which
+        // then keeps ↑/↓ and turns the first ⌘F into a global search).
+        window.initialFirstResponder = nil
+        DispatchQueue.main.async { window.makeFirstResponder(nil) }
     }
 
     public func makeNSView(context: Context) -> NSView {
@@ -79,7 +83,7 @@ public struct WindowAccessor: NSViewRepresentable {
         func installDriveHook(window: NSWindow, session: DocumentSession) {
             guard let dir = ProcessInfo.processInfo.environment["MDV6_SNAPSHOT_DIR"], !dir.isEmpty else { return }
             driveObserver = DistributedNotificationCenter.default().addObserver(forName: Notification.Name("mdv6.drive"), object: nil, queue: .main) { note in
-                guard window.isKeyWindow || NSApp.keyWindow == nil || NSApp.keyWindow === window else { return }
+                guard session.model.targetWindow === window else { return }       // one window acts (R-01's target)
                 if let raw = note.userInfo?["command"] as? String, let command = AppCommand(rawValue: raw) {
                     Task { @MainActor in CommandCenter.post(command, window: window) }
                     return
@@ -108,6 +112,15 @@ public struct WindowAccessor: NSViewRepresentable {
                     case "collapseSidebar": session.model.preferences.sidebarCollapsed = true
                     case "expandSidebar": session.model.preferences.sidebarCollapsed = false
                     case "closeAllConfirmed": session.model.closeAll()                      // R-47 without the sheet
+                    case "closeWindow": window.performClose(nil)                              // R-47 ⇧⌘W (E-38 observed)
+                    case "find": session.setFindQuery((note.userInfo?["path"] as? String) ?? "")      // R-24 observed (T-60)
+                    case "wheel":                                                           // F-151 observed: a wheel over a web diagram
+                        if let cg = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: Int32(-index), wheel2: 0, wheel3: 0) {
+                            let x = Double((note.userInfo?["mods"] as? String)?.split(separator: ",").first ?? "0") ?? 0
+                            let y = Double((note.userInfo?["mods"] as? String)?.split(separator: ",").last ?? "0") ?? 0
+                            cg.location = CGPoint(x: window.frame.minX + x, y: (NSScreen.screens.first?.frame.height ?? 0) - (window.frame.minY + y))
+                            cg.postToPid(ProcessInfo.processInfo.processIdentifier)
+                        }
                     case "key":                                                             // R-48/R-49 through the real monitors
                         var mods: NSEvent.ModifierFlags = []
                         let m = (note.userInfo?["mods"] as? String) ?? ""

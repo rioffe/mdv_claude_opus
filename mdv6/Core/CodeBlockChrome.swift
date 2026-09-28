@@ -55,6 +55,12 @@ public struct CodeBlockChrome: View {
             .background(theme.secondaryBackground)
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border, lineWidth: 0.5))
+            .overlay(alignment: .topLeading) {                      // R-08: the language label, leading as in reference/ORIGINAL-DIFF.png
+                Text(CodeLanguage.label(infoString: parts.infoString))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(theme.tertiaryText)
+                    .padding(.leading, 16).padding(.top, 6)
+            }
 
             HStack(spacing: 6) {
                 if hovering {
@@ -63,9 +69,6 @@ public struct CodeBlockChrome: View {
                     Button { Pasteboard.copy(parts.code) } label: { Image(systemName: "doc.on.doc") }
                         .buttonStyle(.plain).help("Copy Code")
                 }
-                Text(CodeLanguage.label(infoString: parts.infoString))
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundStyle(theme.tertiaryText)
             }
             .font(.system(size: 11))
             .foregroundStyle(theme.secondaryText)
